@@ -21,7 +21,7 @@ Currently only ATR format is supported.
 Supported filesystems
 ---------------------
 
-Currently only Atari DOS format is supported.
+Currently only MyDos filesystem is supported.
 
 Installation
 ------------
@@ -42,8 +42,7 @@ $ make
 
 After successful build, you can move file +xedisk.exe+ or +xedisk+ to a directory within your +PATH+.
 
-If you like hacking, you can easily do without make, and you can use different D compiler
-or even different assembler.
+If you like hacking, you can easily do without make, and you can use different D compiler.
 
 Usage
 -----
@@ -51,7 +50,7 @@ Usage
 A general syntax is:
 
 ----------------------------
-$ xedisk disk_image_file command [options] 
+$ xedisk command [disk_image_file] [options] 
 ----------------------------
 
 You can place options wherever you wish in the command line, as well as bundle
@@ -63,13 +62,14 @@ so you don't need write access rights to the file.
 Feedback
 --------
 
-Send bug reports, patches and feature requests to +epi at atari8 dot info+.
+Recommended way to report issues with +xedisk+ is to use http://github.com/epi/xedisk/issues[this tracker].
+You can also send bug reports, patches and feature requests to +epi at atari8 dot info+.
 
 Authors
 -------
 
 Adrian Matoga::
-Programming.
+"Code, idea, design".
 
 License
 -------
