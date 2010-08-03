@@ -1,37 +1,8 @@
 import std.string;
 import std.contracts;
-import std.date;
+import std.stream;
 
 import image;
-
-string cleanUpFileName(ubyte[] name, ubyte[] ext)
-{
-	char[] result;
-	
-	void custr(ubyte[] str)
-	{
-		foreach (c; str)
-			if (c >= 0x20 && c <= 0x7E && c != '\\')
-				result ~= c;
-			else
-				result ~= format("\\x%02x", c);
-		result = result.stripr();
-	}
-	
-	custr(name);
-	result ~= ".";
-	custr(ext);
-	return result.chomp(".").idup;
-}
-
-interface AtariFile
-{
-	void read(ubyte[] buf);
-	void write(ubyte[] buf);
-	void seek(uint position);
-	uint tell();
-	void close();
-}
 
 struct FileInfo
 {
@@ -41,17 +12,20 @@ struct FileInfo
 	bool isDirectory;
 	bool isNotClosed;
 	bool isDeleted;
+	uint firstSector;
 }
 
 interface FileSystem
 {
 	@property string name();
+	@property Image image();
 
-	AtariFile openFile(string path, string mode);
+	Stream openFile(string path, string mode);
 	void lockFile(string path, bool lock);
+	void deleteFile(string path);
 	void mkDir(string path);
 
-	void listDir(bool delegate(const ref FileInfo) action, string path = "/");
+	void listDir(bool delegate(const ref FileInfo) action, string path = "/*.*");
 	uint getFreeSectors();
 	string getLabel();
 	void initialize();
