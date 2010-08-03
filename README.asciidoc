@@ -61,14 +61,18 @@ so you don't need write access rights to the file.
 Feedback
 --------
 
-Recommended way to report issues with +xedisk+ is to use http://github.com/epi/xedisk/issues[this tracker].
-You can also send bug reports, patches and feature requests to +epi at atari8 dot info+.
+Recommended way to deal with issues concerning +xedisk+ is to clone the repo, fix the bug
+or implement missing feature, and commit the changes with meaningful commit message.
+
+If you don't feel so confident digging in undocumented sources, use http://github.com/epi/xedisk/issues[this tracker].
+
+As a last resort, you can also send bug reports, patches and feature requests to +epi at atari8 dot info+.
 
 Authors
 -------
 
 Adrian Matoga::
-"Code, idea, design".
+So far, everything.
 
 License
 -------
