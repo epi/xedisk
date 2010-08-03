@@ -43,14 +43,14 @@ interface Vtoc
 		throw new Exception("Not implemented");
 	}
 
-	final void takeUpSectors(uint[] sectors)
+	final void markSectors(uint[] sectors, bool free = false)
 	{
 		foreach (sector; sectors)
 		{
-			if (!this[sector])
+			if (this[sector] == free)
 				throw new Exception(format("Sector %d already occupied", sector));
 		}
 		foreach (sector; sectors)
-			this[sector] = false;
+			this[sector] = free;
 	}
 }

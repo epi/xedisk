@@ -24,7 +24,9 @@ class MydosVtoc : Vtoc
 
 	override void flush()
 	{
-		image_.writeSector(vtocSectorNo_, vtocSector_);
+		if (vtocSectorNo_ && modified_)
+			image_.writeSector(vtocSectorNo_, vtocSector_);
+		modified_ = false;
 	}
 
 	@property override Image image()
@@ -39,8 +41,7 @@ private:
 		uint vsn = 360 - vb / image_.bytesPerSector;
 		if (vsn != vtocSectorNo_)
 		{
-			if (modified_)
-				flush();
+			flush();
 			image_.readSector(vsn, vtocSector_);
 			vtocSectorNo_ = vsn;
 		}
