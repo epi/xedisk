@@ -6,7 +6,6 @@ xedisk - Atari XL/XE Disk Image Utility
 
 +xedisk+ is a small command-line utility for manipulating Atari disk image files.
 It supports basic operations on raw sectors as well as on files contained on disks.
-Currently it supports only ATR disk image format and Atari 
 
 +xedisk+ is written in http://www.digitalmars.com/d/2.0/[D programming language] and tested
 under Windows and Linux (x86). However, it should be possible to build and run it on any
