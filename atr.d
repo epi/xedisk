@@ -22,6 +22,8 @@
 import std.stdio;
 import std.string;
 import std.contracts;
+import std.algorithm;
+
 import image;
 
 class AtrImage : Image
@@ -55,6 +57,7 @@ class AtrImage : Image
 		return 3;
 	}
 
+private:
 	File file_;
 	
 	uint bytesPerSector_;
@@ -94,10 +97,23 @@ protected:
 
 	override void createImpl(string path, uint totalSectors, uint bytesPerSector, uint singleDensitySectors)
 	{
-		throw new Exception("Not implemented");
-/*		enforce(singleDensitySectors == 3, "ATR format does not support disks with single-density sector count other than 3");
-		imin(0, totalSectors - 3)
+		enforce(singleDensitySectors == 3, "ATR format does not support disks with single-density sector count other than 3");
+		uint size = (totalSectors - 3) * bytesPerSector + 128 * 3;
 		file_ = File(path, "wb");
-		auto header = [ 0x96, 0x02, */
+		ubyte[] header = [
+			0x96, 0x02,
+			size & 0xFF, (size >>> 8) & 0xFF,
+			bytesPerSector & 0xFF, (bytesPerSector >>> 8) & 0xFF,
+			(size >>> 16) & 0xFF,
+			0, 0, 0, 0, 0, 0, 0, 0, 0 ];
+		assert(header.length == 16);
+		file_.rawWrite(header);
+		auto sector = new ubyte[max(bytesPerSector, 128)];
+		foreach (i; 1 .. 4)
+			file_.rawWrite(sector[0 .. 128]);
+		foreach (i; 4 .. totalSectors)
+			file_.rawWrite(sector[0 .. bytesPerSector]);
+		file_.close();
+		file_ = File(path, "r+b");
 	}
 }
