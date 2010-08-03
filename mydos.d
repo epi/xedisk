@@ -1,26 +1,15 @@
 import std.string;
 import std.contracts;
+import std.algorithm;
+import std.stream;
 
 import image;
 import filesystem;
 import mydosvtoc;
+import filename;
+import directory;
 
-class MydosFile : AtariFile
-{
-	override void read(ubyte[] buf)		{ throw new Exception("Not Implemented"); }
-	override void write(ubyte[] buf)	{ throw new Exception("Not Implemented"); }
-	override void seek(uint position)	{ throw new Exception("Not Implemented"); }
-	override uint tell()	{ throw new Exception("Not Implemented"); }
-	override void close()	{ throw new Exception("Not Implemented"); }
-
-private:
-	this(MydosFileSystem fs, string name, string mode)
-	{
-		fileSystem_ = fs;
-	}
-	
-	MydosFileSystem fileSystem_;
-}
+package:
 
 class MydosFileSystem : FileSystem
 {
@@ -36,12 +25,34 @@ class MydosFileSystem : FileSystem
 		return null;
 	}
 
-	override MydosFile openFile(string path, string mode)
+	override MydosFileStream openFile(string path, string mode)
 	{
-		return new MydosFile(this, path, mode);
+		uint sector;
+		if (mode == "r" || mode == "rb")
+		{
+			listDir((ref const FileInfo fi)
+			{
+				sector = fi.firstSector;
+				return false;
+			}, path);
+			enforce(sector, "File not found: " ~ path);
+		}
+		else if (mode == "w" || mode == "wb")
+		{
+			throw new Exception("Not implemented");
+		}
+		else
+			throw new Exception("Invalid file access mode");
+			
+		return new MydosFileStream(this, sector, mode);
 	}
 
 	override void lockFile(string path, bool lock)
+	{
+		throw new Exception("Not implemented");
+	}
+
+	override void deleteFile(string path)
 	{
 		throw new Exception("Not implemented");
 	}
@@ -51,9 +62,41 @@ class MydosFileSystem : FileSystem
 		throw new Exception("Not implemented");
 	}
 
-	override void listDir(bool delegate(const ref FileInfo) action, string path = "/")
+	override void listDir(bool delegate(const ref FileInfo) action, string path)
 	{
-		listDir(action, 361);
+		auto spath = splitPath(path);
+		uint sector = 361;
+		foreach (dir; spath[0 .. $ - 1])
+		{
+			auto ddir = new AtaridosDirectory(image_, sector);
+			sector = 0;
+			foreach (i; 0 .. 63)
+			{
+				auto entry = ddir[i];
+				if (entry[0])
+				{
+					auto fi = unpackDirEntry(entry);
+					if (matchFileName(fi.name, dir))
+					{
+						sector = fi.firstSector;
+						break;
+					}
+				}
+			}
+			if (!sector)
+				throw new Exception("Directory " ~ dir ~ " not found");
+		}
+		auto ddir = new AtaridosDirectory(image_, sector);
+		foreach (i; 0 .. 63)
+		{
+			auto entry = ddir[i];
+			if (entry[0])
+			{
+				auto fi = unpackDirEntry(entry);
+				if (matchFileName(fi.name, spath[$ - 1]) && !action(fi))
+					break;
+			}
+		}
 	}
 	
 	override void initialize()
@@ -86,42 +129,126 @@ class MydosFileSystem : FileSystem
 		return "Mydos";
 	}
 
+	override @property Image image()
+	{
+		return image_;
+	}
+
 private:
 	Image image_;
-	MydosVtoc vtoc_;
 
 	this(Image img)
 	{
 		image_ = img;
-		vtoc_ = new MydosVtoc(img);
+	}
+
+	FileInfo unpackDirEntry(ubyte[] entry)
+	{
+		auto fi = FileInfo();
+		if ((entry[0] & 0x46) == 0x46)
+		{
+			fi.length = (entry[1] | (entry[2] << 8)) * (image_.bytesPerSector - 3);
+		}
+		else if ((entry[0] & 0x10) == 0x10)
+		{
+			fi.isDirectory = true;
+			fi.length = 8 * 128;
+		}
+		else
+			return fi;
+		fi.name = cleanUpFileName(entry[5 .. 13], entry[13 .. 16]);
+		fi.isDeleted = !!(entry[0] & 0x80);
+		fi.isReadOnly = !!(entry[0] & 0x20);
+		fi.isNotClosed = !!(entry[0] & 0x01);
+		fi.firstSector = (entry[3] | (entry[4] << 8));
+		return fi;
 	}
 	
-	void listDir (bool delegate(const ref FileInfo) action, uint firstSector)
+	ubyte[] packDirEntry(ref const FileInfo fi)
 	{
-		foreach (sector; firstSector .. firstSector + 8)
-		{
-			auto sec = image_.readSector(sector);
-			foreach (i; 0 .. 8)
-			{
-				auto entry = sec[i * 16 .. i * 16 + 16];
-				auto fi = FileInfo(cleanUpFileName(entry[5 .. 13], entry[13 .. 16]));
-				if ((entry[0] & 0x46) == 0x46)
-				{
-					fi.length = (entry[1] | (entry[2] << 8)) * (image_.bytesPerSector - 3);
-				}
-				else if ((entry[0] & 0x10) == 0x10)
-				{
-					fi.isDirectory = true;
-					fi.length = 8 * 128;
-				}
-				else
-					continue;
-				fi.isDeleted = !!(entry[0] & 0x80);
-				fi.isReadOnly = !!(entry[0] & 0x20);
-				fi.isNotClosed = !!(entry[0] & 0x01);
-				if (!action(fi))
-					return;
-			}
-		}
+		return new ubyte[0];
 	}
+}
+
+class MydosFileStream : Stream
+{
+	/** Read up to size bytes into the buffer and return the number of bytes actually read. A return value of 0 indicates end-of-file.
+	*/
+	override size_t readBlock(void* buffer, size_t size)
+	{
+		for (size_t pos = 0; pos < size; )
+		{
+			enforce(offset_ <= dataLen_, "File corrupted");
+			if (offset_ == dataLen_)
+				if (!readNextSector())
+					return pos;
+			size_t len = min(size - pos, dataLen_ - offset_);
+			buffer[pos .. pos + len] = sector_[offset_ .. offset_ + len];
+			offset_ += len;
+			pos += len;
+		}
+		return size;
+	}
+
+	/** Write up to size bytes from buffer in the stream, returning the actual number of bytes that were written.
+	*/
+	override size_t writeBlock(const void* buffer, size_t size)
+	{
+		throw new WriteException("not implemented");
+	}
+	
+	override ulong seek(long offset, SeekPos whence)
+	{
+		throw new SeekException("not implemented");
+	}
+
+	override void close()
+	{
+		super.close();
+		if (mode_ != "r" && mode_ != "rb")
+			throw new Exception("Not Implemented");
+	}
+
+private:
+	this(MydosFileSystem fs, uint firstSector, string mode)
+	{
+		fileSystem_ = fs;
+		firstSector_ = physSector_ = firstSector;
+		mode_ = mode;
+
+		writeable = false;
+		readable = true;
+		seekable = false;
+	}
+
+	bool readNextSector()
+	{
+		if (sector_.length)
+		{
+			if (modified_)
+				fileSystem_.image.writeSector(physSector_, sector_);
+			modified_ = false;
+			++logSector_;
+			physSector_ = sector_[$ - 2] | (sector_[$ - 3] << 8);
+		}
+		if (!physSector_)
+			return false;
+		offset_ = 0;
+		fileSystem_.image.readSector(physSector_, sector_);
+		dataLen_ = sector_[$ - 1];
+		return true;
+	}
+
+	uint physSector_;
+	uint logSector_;
+	uint offset_;
+
+	ubyte[] sector_;
+	uint dataLen_;
+	bool modified_;
+
+	uint firstSector_;
+	string mode_;
+
+	MydosFileSystem fileSystem_;	
 }
