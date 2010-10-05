@@ -1,21 +1,86 @@
 import std.string;
 import std.stdio;
 
-string cleanUpFileName(ubyte[] name, ubyte[] ext)
+struct FileName
 {
-	char[] result;
-	
-	void custr(ubyte[] str)
+	string fn;
+
+	this(string fn)
 	{
-		foreach (c; str)
-			result ~= (c >= 0x20 && c <= 0x7E) ? c : '_';
-		result = result.stripr();
+		this.fn = fn;
+	}
+
+	this(ubyte[] rawnameext)
+	{
+		this(rawnameext[0 .. 8], rawnameext[8 .. 11]);
+	}
+
+	this(ubyte[] rawname, ubyte[] rawext)
+	{
+		void custr(ubyte[] str)
+		{
+			foreach (c; str)
+				fn ~= (c >= 0x20 && c <= 0x7E) ? c : '_';
+			fn = fn.stripr();
+		}
+		
+		custr(rawname);
+		fn = fn ~ ".";
+		custr(rawext);
+		fn = fn.stripr().chomp(".");
+	}
+
+	string expand()
+	{
+		auto result = new char[11];
+		size_t i, j;
+		while (i < 11 && j < fn.length)
+		{
+			auto b = fn[j++];
+			size_t en;
+			switch (b)
+			{
+			case '.':
+				while (i < 8)
+					result[i++] = ' ';
+				break;
+			case '*':
+				en = (i < 8) ? 8 : 11;
+				while (i < en)
+					result[i++] = '?';
+				break;
+			default:
+				result[i++] = b;
+			}
+		}
+		while (i < 11)
+			result[i++] = ' ';
+		toupperInPlace(result);
+		return result.idup;
 	}
 	
-	custr(name);
-	result ~= ".";
-	custr(ext);
-	return result.chomp(".").idup;
+	bool match(string mask)
+	{
+		auto efn = expand();
+		auto em = FileName(mask).expand();
+		assert (efn.length == em.length, "|" ~ efn ~ "|" ~ em ~ "|");
+		foreach (i, m; em)
+		{
+			if (m != '?' && efn[i] != m)
+				return false;
+		}
+		return true;
+	}
+
+	string toString()
+	{
+		return fn;
+	}
+	
+	string opCast(T)() if (is(T == string))
+	{
+		return fn;
+	}
 }
 
 string[] splitPath(string path)
@@ -28,46 +93,4 @@ string[] splitPath(string path)
 			result ~= s.idup;
 	}
 	return result;
-}
-
-string expandFileName(string filename)
-{
-	auto result = new char[11];
-	size_t i, j;
-	while (i < 11 && j < filename.length)
-	{
-		auto b = filename[j++];
-		size_t en;
-		switch (b)
-		{
-		case '.':
-			while (i < 8)
-				result[i++] = ' ';
-			break;
-		case '*':
-			en = (i < 8) ? 8 : 11;
-			while (i < en)
-				result[i++] = '?';
-			break;
-		default:
-			result[i++] = b;
-		}
-	}
-	while (i < 11)
-		result[i++] = ' ';
-	toupperInPlace(result);
-	return result.idup;
-}
-
-bool matchFileName(string filename, string mask)
-{
-	auto efn = expandFileName(filename);
-	auto em = expandFileName(mask);
-	assert (efn.length == em.length, "|" ~ efn ~ "|" ~ em ~ "|");
-	foreach (i, m; em)
-	{
-		if (m != '?' && efn[i] != m)
-			return false;
-	}
-	return true;
 }

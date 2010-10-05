@@ -1,6 +1,4 @@
-/*	(Written in D programming language)
-
-	xedisk - Atari XL/XE Disk Image Utility
+/*	xedisk - Atari XL/XE Disk Image Utility
 	Command line interface for library modules.
 
 	Author: Adrian Matoga epi@atari8.info
@@ -20,110 +18,165 @@
 	These rights, on this notice, rely.
 */
 
-import std.stdio;
-import std.string;
-import std.conv;
-import std.getopt;
-import std.date;
-import std.contracts;
+import std.stdio: File, write, writeln, writefln;
+import std.string: tolower, lastIndexOf, startsWith;
+import std.conv: to;
+import std.getopt: getopt, config;
+import std.exception: enforce;
+import std.file: exists, isfile, mkdir, listdir;
+import std.algorithm: max;
+import std.path: isabs;
 
 import image;
 import filesystem;
 
-uint bytesPerSector = 256;
-uint totalSectors = 720;
-bool verbose;
-string imageFileName;
-
-struct OpenFileSystem
+BufferedImage openImage(string[] args)
 {
-	this(string filename, bool readOnly = true, bool throwOnUnknownFilesystem = true)
-	{
-		image = Image.open(filename, readOnly);
-		scope (failure) image.close();
-		auto e = collectException(fs = FileSystem.open(image));
-		if (e !is null && throwOnUnknownFilesystem)
-			throw e;
-	}
-
-	~this()
-	{
-		if (fs !is null)
-			fs.close();
-		image.close();
-	}
-
-	Image image;
-	FileSystem fs;
+	if (args.length > 2)
+		return new BufferedImage(Image.open(args[2]));
+	throw new Exception("No image file name specified");
 }
 
 void info(string[] args)
 {
-	auto ofs = OpenFileSystem(imageFileName, true, false);
+	auto image = openImage(args);
+	scope (exit) image.close();
 
-	writeln("Image file name:   ", imageFileName);
-	writeln("Total sectors:     ", ofs.image.totalSectors);
-	writeln("Bytes per sectors: ", ofs.image.bytesPerSector);
+	writeln("Total sectors:     ", image.totalSectors);
+	writeln("Bytes per sectors: ", image.bytesPerSector);
 
-	writeln("\nFilesystem:        ", ofs.fs is null ? "n/a" : ofs.fs.name);
-	writeln("Label:             ", ofs.fs is null ? "n/a" : ofs.fs.getLabel());
-	writeln("Free sectors:      ", ofs.fs is null ? "n/a" : to!string(ofs.fs.getFreeSectors()));
+	auto fs = FileSystem.open(image);
+	scope (exit) fs.close();
+
+	writeln("\nFilesystem:        ", fs.name);
+	writeln("Label:             ", fs.label);
+	writeln("Free sectors:      ", fs.freeSectors);
 }
 
 void dir(string[] args)
 {
-	auto ofs = OpenFileSystem(imageFileName);
-	if (verbose)
+	auto image = openImage(args);
+	scope (exit) image.close();
+	auto fs = FileSystem.open(image);
+	scope (exit) fs.close();
+
+	bool longFormat;
+
+	getopt(args,
+		config.caseSensitive,
+		"v|verbose", &longFormat);
+
+	if (longFormat)
 	{
 		uint files = 0;
-		writeln("Filesystem: ", ofs.fs.name);
-		writeln("Label:      ", ofs.fs.getLabel(), "\n");
-		ofs.fs.listDir((const ref FileInfo dirEntry)
+		writeln("Filesystem: ", fs.name);
+		writeln("Label:      ", fs.label, "\n");
+		fs.listDir((DirEntry dirEntry)
 		{
-			writefln("%c%c%c%c %-12s %8d",
-				dirEntry.isDeleted ? "x" : " ",
-				dirEntry.isNotClosed ? "u" : " ",
-				dirEntry.isDirectory ? ":" : " ",
-				dirEntry.isReadOnly ? "*" : " ",
-				dirEntry.name,
-				dirEntry.length);
+			writefln("%c%c %-12s %8d",
+				dirEntry.isDir ? ":" : " ",
+				dirEntry.readOnly ? "*" : " ",
+				dirEntry.name.fn,
+				dirEntry.size);
 			++files;
 			return true;
-		}, args.length > 3 ? args[3] : "/*.*");
+		}, args.length > 3 ? args[3] : "/");
 		writefln("\n%11d files", files);
-		writefln("%5d/%5d sectors free", ofs.fs.getFreeSectors(), ofs.image.totalSectors);
+		writefln("%5d/%5d sectors free", fs.freeSectors, image.totalSectors);
 	}
 	else
 	{
-		ofs.fs.listDir((const ref FileInfo dirEntry)
+		fs.listDir((DirEntry dirEntry)
 		{
-			writefln(dirEntry.name);
+			writeln(dirEntry.name);
 			return true;
-		}, args.length > 3 ? args[3] : "/*.*");
+		}, args.length > 3 ? args[3] : "/");
 	}
+}
+
+void create(string[] args)
+{
+	uint bytesPerSector = 256;
+	uint totalSectors = 720;
+	string fileSystem;
+
+	getopt(args,
+		config.caseSensitive,
+		"b|bytes-per-sector", &bytesPerSector,
+		"s|total-sectors", &totalSectors,
+		"F|filesystem", &fileSystem);
+
+	if (args.length < 3)
+		throw new Exception("No image file name specified");
+	auto img = new BufferedImage(Image.create(args[2], totalSectors, bytesPerSector));
+	scope (exit) img.close();
+
+	if (fileSystem.length)
+		FileSystem.create(img, fileSystem).close();
+}
+
+void boot(string[] args)
+{
+	auto image = openImage(args);
+	scope (exit) image.close();
+	auto fs = FileSystem.open(image);
+	scope (exit) fs.close();
+
+	string dosVersion;
+	
+	getopt(args,
+		config.caseSensitive,
+		"d|dos-version", &dosVersion);
+
+	enforce(dosVersion.length, "No DOS version specified");
+	fs.writeDosFiles(dosVersion);
 }
 
 void extract(string[] args)
 {
-	auto ofs = OpenFileSystem(imageFileName);
-	auto fs = ofs.fs;
+	auto image = openImage(args);
+	scope (exit) image.close();
+	auto fs = FileSystem.open(image);
+	scope (exit) fs.close();
 
-	bool extractOne(const ref FileInfo dirEntry)
+	string destDir;
+	bool lowerCase;
+	bool verbose;
+
+	getopt(args,
+		config.caseSensitive,
+		"v|verbose", &verbose,
+		"c|lowercase", &lowerCase,
+		"D|dest-dir", &destDir);
+	if (destDir.length)
+		destDir ~= "/";
+
+	enforce(args.length >= 4, "No source files specified");
+
+	bool extractOne(DirEntry dirEntry)
 	{
-		if (verbose)
-			writeln(dirEntry.name);
-		if (dirEntry.isDirectory || dirEntry.isDeleted || dirEntry.isNotClosed)
+		writeln(destDir ~ dirEntry.name.fn);
+		if (dirEntry.isDir)
 		{
-			throw new Exception("Not implemented");
+			auto idir = dirEntry.openDir();
+			destDir ~= lowerCase ? tolower(dirEntry.name.fn) : dirEntry.name.fn;
+			if (!exists(destDir))
+				mkdir(destDir);
+			destDir ~= "/";
+			foreach (de; idir)
+				extractOne(de);
+			writeln(destDir);
+			destDir = destDir[0 .. max(lastIndexOf(destDir[0 .. $ - 1], "/"), 0)];
 		}
-		auto ifile = fs.openFile(dirEntry.name, "rb");
-		scope (exit) ifile.close();
-		auto ofile = File(dirEntry.name, "wb");
-
-		auto blk = new ubyte[4096];
-		
-		for (size_t len; (len = ifile.read(blk)) > 0; )
-			ofile.rawWrite(blk[0 .. len]);
+		else
+		{
+			auto ifile = dirEntry.openFile(true, false, false);
+			scope (exit) ifile.close();
+			auto ofile = File(destDir ~ (lowerCase ? tolower(dirEntry.name.fn) : dirEntry.name.fn), "wb");
+			auto blk = new ubyte[4096];
+			for (size_t len; (len = ifile.read(blk)) > 0; )
+				ofile.rawWrite(blk[0 .. len]);
+		}
 		return true;
 	}
 
@@ -133,55 +186,145 @@ void extract(string[] args)
 	}
 }
 
+void add(string[] args)
+{
+	auto image = openImage(args);
+	scope (exit) image.close();
+	auto fs = FileSystem.open(image);
+	scope (exit) fs.close();
+
+	string destDir;
+	bool lowerCase;
+	bool verbose;
+
+	getopt(args,
+		config.caseSensitive,
+		"v|verbose", &verbose,
+		"c|lowercase", &lowerCase,
+		"D|dest-dir", &destDir);
+//	if (destDir.length)
+//		destDir ~= "/";
+
+	auto destDirRange = fs.findDir(destDir);
+
+	enforce(args.length >= 4, "No source files specified");
+
+	void copyFile(DirRange dr, string fname)
+	{
+		writeln(fname);
+	}
+
+	bool addOne(std.file.DirEntry* de)
+	{
+		writeln(de.name);
+		if (de.isdir)
+			listdir(de.name, &addOne);
+		else
+			copyFile(destDirRange, de.name);
+		return true;
+	}
+
+/*		writeln(destDir ~ dirEntry.name.fn);
+		if (dirEntry.isDir)
+		{
+			auto idir = dirEntry.openDir();
+			destDir ~= lowerCase ? tolower(dirEntry.name.fn) : dirEntry.name.fn;
+			if (!exists(destDir))
+				mkdir(destDir);
+			destDir ~= "/";
+			foreach (de; idir)
+				extractOne(de);
+			writeln(destDir);
+			destDir = destDir[0 .. max(lastIndexOf(destDir[0 .. $ - 1], "/"), 0)];
+		}
+		else
+		{
+			auto ifile = dirEntry.openFile(true, false, false);
+			scope (exit) ifile.close();
+			auto ofile = File(destDir ~ (lowerCase ? tolower(dirEntry.name.fn) : dirEntry.name.fn), "wb");
+			auto blk = new ubyte[4096];
+			for (size_t len; (len = ifile.read(blk)) > 0; )
+				ofile.rawWrite(blk[0 .. len]);
+		}
+		return true;
+	}*/
+
+	foreach (fname; args[3 .. $])
+	{
+		if (std.file.isdir(fname))
+			copyFile(destDirRange, fname);
+		else
+			listdir(fname, &addOne);
+//		listDir(&addOne, fname);
+	}
+}
+
 void printHelp(string[] args)
 {
 	write(
 		"Atari XL/XE Disk Image Utility\n" ~
-		"\nUsage:\n",
-		args[0], " command disk_image_file [options]\n" ~
-		"\nThe following commands are available:\n" ~
-		" c[reate] [-b bytes] [-s sec] [files...]\n"
-		"                              create empty disk image and optionally copy\n" ~
-		"                              specified files to it\n" ~
-		" i[nfo]                       show basic image information\n" ~
-		" e[xtract] files...           extract files from disk image\n" ~
-		" a[dd] files...               copy files to disk image\n" ~
-		" d[ir] [path]                 list files in given directory (default is root)\n" ~
-		" h[elp]                       print this message\n" ~
-		"\nOptions:\n" ~
-		" -b|--bytes-per-sector bytes  set number of bytes per sector for created\n" ~
-		"                              image; default is ", bytesPerSector.init, "\n" ~
-		" -s|--total-sectors sec       set total number of sectors for created image;\n" ~
-		"                              default is ", totalSectors.init, "\n" ~
-		" -v|--verbose                 emit more junk to stdout\n"
+		"\nGeneral usage:\n",
+		args[0], " command [disk_image_file] [options] [files...]\n" ~
+		"\nAvailable commands:\n\n",
+		args[0], " i[nfo] disk_image_file\n" ~
+		"  Show basic image information.\n\n",
+		args[0], " d[ir]|l[s]|l[ist] [-v] disk_image_file [path]\n" ~ 
+		"  List files in given directory (default is root)\n" ~
+		" -v|--verbose               use long output format\n\n",
+		args[0], " n[ew] disk_image_file [-F=fs] [-b=bps] [-s=sec]\n" ~ 
+		"  Create empty disk image.\n" ~
+		" -F|--filesystem=fs         initialize with specified filesystem\n" ~
+		" -b|--bytes-per-sector=bps  set number of bytes per sector for created\n" ~
+		"                            image; default is 256\n" ~
+		" -s|--total-sectors=sec     set total number of sectors for created image;\n" ~
+		"                            default is 720\n\n",
+		args[0], " b[oot] disk_image_file -d=version\n" ~
+		"  Write DOS files to disk image.\n" ~
+		" -d|--dos-version=version   specify DOS version, e.g. \"mydos450t\"\n\n",
+		args[0], " e[xtract] [-D=dest] disk_image_file files...\n" ~
+		"  Extract file[s] and/or directories from disk image.\n" ~
+		" -v|--verbose               list names of extracted files\n" ~
+		" -c|--lowercase             change case of all names to lowercase\n" ~
+		" -D|--dest-dir=dest         specify destination directory, default is\n" ~
+		"                            current working directory\n\n",
+		args[0], " a[dd] [-D=dest] disk_image_file files...\n" ~
+		"  Copy file[s] and/or directories to disk image.\n" ~
+		" -v|--verbose               list names of copied files\n" ~
+		" -D|--dest-dir=dest         specify destination directory within image\n\n",
+		args[0], " h[elp]\n" ~
+		"  Print this message\n"
 		);
 }
 
 int main(string[] args)
 {
-	getopt(args,
-		config.caseSensitive,
-		config.bundling,
-		"b|bytes-per-sector", &bytesPerSector,
-		"s|total-sectors", &totalSectors,
-		"v|verbose", &verbose);
-
-	if (args.length > 2)
+	try
 	{
-		imageFileName = args[2];
-		
-		auto funcs = [
-			"help":&printHelp,
-			"info":&info,
-			"dir":&dir,
-			"extract":&extract,
-			];
-		foreach (cmd, fun; funcs)
+		if (args.length > 1)
 		{
-			if (cmd.startsWith(args[1]))
-				return fun(args), 0;
+			auto funcs = [
+				"help":&printHelp,
+				"info":&info,
+				"dir":&dir,
+				"ls":&dir,
+				"list":&dir,
+				"new":&create,
+				"boot":&boot,
+				"extract":&extract,
+				"add":&add,
+				];
+			foreach (cmd, fun; funcs)
+			{
+				if (cmd.startsWith(args[1]))
+					return fun(args), 0;
+			}
 		}
+		printHelp(args);
+		return 1;
 	}
-	printHelp(args);
-	return 1;
+	catch (Exception e)
+	{
+		writeln("Ooops! " ~ e.msg);
+		return 1;
+	}
 }

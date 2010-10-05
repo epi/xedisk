@@ -1,6 +1,5 @@
-/*	(Written in D programming language)
-
-	Image interface implementation for ATR format.
+/*  atr - implementation of Image interface for
+	the most common ATR disk image format.
 
 	Author: Adrian Matoga epi@atari8.info
 	
@@ -21,7 +20,7 @@
 
 import std.stdio;
 import std.string;
-import std.contracts;
+import std.exception;
 import std.algorithm;
 
 import image;
@@ -78,7 +77,7 @@ protected:
 		file_.rawRead(buf);
 	}
 
-	override void writeSectorImpl(uint sector, ubyte[] buf)
+	override void writeSectorImpl(uint sector, in ubyte[] buf)
 	{
 		seek(sector);
 		file_.rawWrite(buf);
@@ -92,13 +91,13 @@ protected:
 		enforce(header[0] == 0x96 && header[1] == 0x02, "Invalid ATR file header");
 		uint size = (header[2] | (header[3] << 8) | (header[6] << 16)) * 16;
 		bytesPerSector_ = header[4] | (header[5] << 8);
-		totalSectors_ = (size + 3 * 128) / bytesPerSector_;
+		totalSectors_ = (size + 3 * (bytesPerSector_ - 128)) / bytesPerSector_;
 	}
 
 	override void createImpl(string path, uint totalSectors, uint bytesPerSector, uint singleDensitySectors)
 	{
 		enforce(singleDensitySectors == 3, "ATR format does not support disks with single-density sector count other than 3");
-		uint size = (totalSectors - 3) * bytesPerSector + 128 * 3;
+		uint size = ((totalSectors - 3) * bytesPerSector + 128 * 3) / 16;
 		file_ = File(path, "wb");
 		ubyte[] header = [
 			0x96, 0x02,
@@ -109,11 +108,12 @@ protected:
 		assert(header.length == 16);
 		file_.rawWrite(header);
 		auto sector = new ubyte[max(bytesPerSector, 128)];
-		foreach (i; 1 .. 4)
-			file_.rawWrite(sector[0 .. 128]);
-		foreach (i; 4 .. totalSectors)
-			file_.rawWrite(sector[0 .. bytesPerSector]);
+		file_.seek(16 + size * 16 - 1);
+		file_.rawWrite([cast(ubyte) 0]);
 		file_.close();
+		
 		file_ = File(path, "r+b");
+		totalSectors_ = totalSectors;
+		bytesPerSector_ = bytesPerSector;
 	}
 }

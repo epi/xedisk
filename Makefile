@@ -1,6 +1,6 @@
-DC = dmd -O -release -inline -of$@
+DC = dmd -debug -unittest -g -w -wi -of$@
 RM = rm -f
-SOURCES = xedisk.d image.d filesystem.d atr.d mydos.d vtoc.d mydosvtoc.d filename.d directory.d
+SOURCES = xedisk.d image.d filesystem.d atr.d mydos.d filename.d vtoc.d
 
 OS := $(shell uname -s)
 ifneq (,$(findstring windows,$(OS)))
@@ -14,13 +14,13 @@ EXESUFFIX=.exe
 endif
 XEDISK_EXE=xedisk$(EXESUFFIX)
 
-all: $(XEDISK_EXE)
+all: $(XEDISK_EXE) 
 
-debug:
-	$(MAKE) DC="dmd -of$(XEDISK_EXE)"
+release:
+	$(MAKE) DC="dmd -O -release -inline -Dddoc -of$(XEDISK_EXE)"
 
 $(XEDISK_EXE): $(SOURCES) 
-	$(DC) $(SOURCES) -J.
+	$(DC) $(SOURCES) -Jdos
 
 clean:
 	$(RM) $(XEDISK_EXE) xedisk.o $(SOURCES:.d=.obj) $(SOURCES:.d=.map)
