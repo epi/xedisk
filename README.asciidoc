@@ -25,7 +25,7 @@ Currently only MyDos filesystem is supported.
 Installation
 ------------
 
-You need http://www.digitalmars.com/d/download.html[DMD 2.047], and a GNU compatible make to build +xedisk+.
+You need http://www.digitalmars.com/d/download.html[DMD 2.051], and a GNU compatible make to build +xedisk+.
 
 Go to console window, and, depending on your operating system, type
 
@@ -72,7 +72,10 @@ Authors
 -------
 
 Adrian Matoga::
-So far, everything.
+Design, implementation, testing, idling.
+
+Charles Marslett, Wordmark Systems::
+MyDOS 4.50.
 
 License
 -------
