@@ -25,6 +25,14 @@ import std.stream;
 import image;
 import filename;
 
+class FileSystemException : Exception
+{
+	this(string msg)
+	{
+		super(msg);
+	}
+}
+
 /// An abstract filesystem.
 interface FileSystem
 {
@@ -41,7 +49,7 @@ interface FileSystem
 			if (fs !is null)
 				return fs;
 		}
-		throw new Exception("Cannot detect filesystem");
+		throw new FileSystemException("Cannot detect filesystem");
 	}
 	
 	/// Create empty filesystem on existing image.
@@ -53,7 +61,7 @@ interface FileSystem
 	static FileSystem create(BufferedImage img, string name)
 	{
 		auto fs = cast(FileSystem) Object.factory(tolower(name) ~ "." ~ capitalize(name) ~ "FileSystem");
-		enforce(fs !is null, "Unknown filesystem: " ~ name ~ " - cannot create");
+		enforce(fs !is null, new FileSystemException("Unknown filesystem: " ~ name ~ " - cannot create"));
 		fs.image = img;
 		fs.initialize();
 		return fs;
@@ -156,7 +164,7 @@ interface DirEntry
 
 	@property void name(string name);
 
-	/// Size in bytes (may not be exact).
+	/// Exact size in bytes.
 	@property uint size();
 	
 	@property bool readOnly();
@@ -165,8 +173,8 @@ interface DirEntry
 
 	@property bool isDir();
 
-	/// Parent directory.
-	DirEntry parent();
+	// /// Parent directory.
+	// DirEntry parent();
 
 	/// Open as file.
 	Stream openFile(bool readable = true, bool writeable = false, bool append = false);
@@ -222,7 +230,7 @@ interface DirRange
 			if (entry.name.match(name))
 				return entry;
 		}
-		enforce(!doThrow, name ~ " not found");
+		enforce(!doThrow, new FileSystemException(name ~ " not found"));
 		return null;
 	}
 	
@@ -245,6 +253,37 @@ interface DirRange
 				de = createFile(name);
 			return de.openFile(plus, true, true);
 		}
-		throw new Exception("Invalid file open mode");
+		throw new FileSystemException("Invalid file open mode");
+	}
+}
+
+version (unittest)
+{
+	import std.random;
+
+	void unittestFileSystem(FileSystem fs)
+	{
+		auto freeSec = fs.freeSectors;
+		auto secSize = fs.image.bytesPerSector;
+		
+		auto rnd = Random(unpredictableSeed);
+		auto arr = new ubyte[freeSec * secSize / 2];
+		foreach (ref b; arr)
+		{
+			b = cast(ubyte) uniform(0, 256, rnd);
+		}
+
+		auto exc = collectException(fs.rootDir.openFile("blah", "r"));
+		assert((cast(FileSystemException) exc) !is null,
+			exc.classinfo.name ~ ": " ~ exc.msg);
+		auto fw = fs.rootDir.openFile("blah", "w");
+		fw.write(arr);
+		fw.close();
+		
+		assert(fs.freeSectors < freeSec);
+		auto fr = fs.rootDir.openFile("blah", "r");
+		auto rarr = new ubyte[arr.length + 1];
+		fr.read(rarr);
+		fr.close();
 	}
 }

@@ -30,16 +30,16 @@ import std.path: isabs;
 import image;
 import filesystem;
 
-BufferedImage openImage(string[] args)
+BufferedImage openImage(string[] args, bool readOnly)
 {
 	if (args.length > 2)
-		return new BufferedImage(Image.open(args[2]));
+		return new BufferedImage(Image.open(args[2], readOnly));
 	throw new Exception("No image file name specified");
 }
 
 void info(string[] args)
 {
-	auto image = openImage(args);
+	auto image = openImage(args, true);
 	scope (exit) image.close();
 
 	writeln("Total sectors:     ", image.totalSectors);
@@ -53,9 +53,14 @@ void info(string[] args)
 	writeln("Free sectors:      ", fs.freeSectors);
 }
 
-void dir(string[] args)
+void dump(string[] args)
 {
-	auto image = openImage(args);
+	throw new Exception("Not implemented");	
+}
+
+void list(string[] args)
+{
+	auto image = openImage(args, true);
 	scope (exit) image.close();
 	auto fs = FileSystem.open(image);
 	scope (exit) fs.close();
@@ -73,7 +78,7 @@ void dir(string[] args)
 		writeln("Label:      ", fs.label, "\n");
 		fs.listDir((DirEntry dirEntry)
 		{
-			writefln("%c%c %-12s %8d",
+			writefln("%s%s %-12s %8d",
 				dirEntry.isDir ? ":" : " ",
 				dirEntry.readOnly ? "*" : " ",
 				dirEntry.name.fn,
@@ -117,7 +122,7 @@ void create(string[] args)
 
 void boot(string[] args)
 {
-	auto image = openImage(args);
+	auto image = openImage(args, false);
 	scope (exit) image.close();
 	auto fs = FileSystem.open(image);
 	scope (exit) fs.close();
@@ -130,11 +135,12 @@ void boot(string[] args)
 
 	enforce(dosVersion.length, "No DOS version specified");
 	fs.writeDosFiles(dosVersion);
+	//writeln("DOS files written");
 }
 
 void extract(string[] args)
 {
-	auto image = openImage(args);
+	auto image = openImage(args, true);
 	scope (exit) image.close();
 	auto fs = FileSystem.open(image);
 	scope (exit) fs.close();
@@ -188,7 +194,7 @@ void extract(string[] args)
 
 void add(string[] args)
 {
-	auto image = openImage(args);
+	auto image = openImage(args, false);
 	scope (exit) image.close();
 	auto fs = FileSystem.open(image);
 	scope (exit) fs.close();
@@ -268,7 +274,7 @@ void printHelp(string[] args)
 		"\nAvailable commands:\n\n",
 		args[0], " i[nfo] disk_image_file\n" ~
 		"  Show basic image information.\n\n",
-		args[0], " d[ir]|l[s]|l[ist] [-v] disk_image_file [path]\n" ~ 
+		args[0], " l[s]|l[ist] [-v] disk_image_file [path]\n" ~ 
 		"  List files in given directory (default is root)\n" ~
 		" -v|--verbose               use long output format\n\n",
 		args[0], " n[ew] disk_image_file [-F=fs] [-b=bps] [-s=sec]\n" ~ 
@@ -305,9 +311,9 @@ int main(string[] args)
 			auto funcs = [
 				"help":&printHelp,
 				"info":&info,
-				"dir":&dir,
-				"ls":&dir,
-				"list":&dir,
+				"dump":&dump,
+				"ls":&list,
+				"list":&list,
 				"new":&create,
 				"boot":&boot,
 				"extract":&extract,

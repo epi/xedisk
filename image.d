@@ -20,7 +20,7 @@
 import std.string;
 import std.exception;
 import std.conv;
-debug import std.stdio;
+import std.stdio;
 
 /// Location on disk.
 struct Location
@@ -69,8 +69,10 @@ interface Image
 
 	static Image create(string path, string type, uint totalSectors, uint bytesPerSector, uint singleDensitySectors = 3)
 	{
-		enforce(totalSectors >= singleDensitySectors && totalSectors <= 65535, "Total number of sectors should neither be less than number of single density sector, nor greater than 65535");
-		enforce(bytesPerSector == 0x80 || bytesPerSector == 0x100, "The only supported sector sizes are 128 and 256 bytes, not" ~ to!string(bytesPerSector));
+		enforce(totalSectors >= singleDensitySectors && totalSectors <= 65535,
+			"Total number of sectors should neither be less than number of single density sector, nor greater than 65535");
+		enforce(bytesPerSector == 0x80 || bytesPerSector == 0x100,
+			"The only supported sector sizes are 128 and 256 bytes, not" ~ to!string(bytesPerSector));
 
 		auto img = newObj(path, type);
 		img.createImpl(path, totalSectors, bytesPerSector, singleDensitySectors);
@@ -82,14 +84,14 @@ interface Image
 		return create(path, autoType(path), totalSectors, bytesPerSector, singleDensitySectors);
 	}
 
-	static Image open(string path, string type, bool readOnly = true)
+	static Image open(string path, string type, bool readOnly)
 	{
 		auto img = newObj(path, type);
 		img.openImpl(path, readOnly);
 		return img;
 	}
 
-	static Image open(string path, bool readOnly = true)
+	static Image open(string path, bool readOnly)
 	{
 		return open(path, autoType(path), readOnly);
 	}
@@ -121,7 +123,7 @@ private:
 	}
 }
 
-struct BufferedSector
+class BufferedSector
 {
 	@property size_t length()
 	{
@@ -138,13 +140,29 @@ struct BufferedSector
 		return image_;
 	}
 
+	void alloc()
+	{
+		if (!valid_)
+		{
+			if (data_.length != size_)
+				data_ = new ubyte[size_];
+			valid_ = true;
+		}
+	}
+
+	void request()
+	{
+		if (!valid_)
+		{
+			data_ = image_.image_.readSector(sector_);
+			valid_ = true;
+		}
+	}
+
 	ubyte[] opSlice()
 	{
-		auto pBuf = sector_ in image_.buffers_;
-		if (pBuf)
-			return pBuf.data;
-		else
-			return (image_.buffers_[sector_] = new BufferedImage.Buffer(image_.image_.readSector(sector_))).data;
+		request();
+		return data_;
 	}
 
 	ubyte[] opSlice(size_t begin, size_t end)
@@ -164,7 +182,9 @@ struct BufferedSector
 	}
 	body
 	{
-		image_.image_.writeSector(sector_, data);
+		alloc();
+		data_[] = data[];
+		modified_ = true;
 	}
 
 	void opSliceAssign(in ubyte[] data)
@@ -174,7 +194,9 @@ struct BufferedSector
 	}
 	body
 	{
-		image_.image_.writeSector(sector_, data);
+		data_ = data.dup;
+		modified_ = true;
+		valid_ = true;
 	}
 
 	void opSliceAssign(in ubyte[] data, size_t begin, size_t end)
@@ -186,29 +208,24 @@ struct BufferedSector
 	body
 	{
 		if (begin == 0 && end == size_)
-			image_.image_.writeSector(sector_, data);
+			this[] = data;
 		else
 		{
-			auto buf = image_.buffers_.get(sector_, null);
-			if (buf is null)
-				buf = image_.buffers_[sector_] = new BufferedImage.Buffer(image_.image_.readSector(sector_));
-			buf.data[begin .. end] = data[];
-			buf.modified = true;
+			request();
+			data_[begin .. end] = data[];
+			modified_ = true;
 		}
 	}
 
 	void opIndexAssign(ubyte data, size_t index)
 	{
-		opSliceAssign([ data ], index, index + 1);
+		request();
+		data_[index] = data;
+		modified_ = true;
 	}
 
 private:
 	this (BufferedImage img, uint sector)
-	in
-	{
-		assert (sector >= 1 && sector <= img.totalSectors);
-	}
-	body
 	{
 		image_ = img;
 		sector_ = sector;
@@ -218,6 +235,9 @@ private:
 	BufferedImage image_;
 	uint sector_;
 	uint size_;
+	bool modified_;
+	bool valid_;
+	ubyte[] data_;
 }
 
 class BufferedImage
@@ -257,10 +277,11 @@ class BufferedImage
 	{
 		foreach (sector, buf; buffers_)
 		{
-			if (buf.modified)
+			if (buf.modified_)
 			{
-				image_.writeSector(sector, buf.data);
-				buf.modified = false;
+				debug (BufferedImage) writefln("sector %d modified, flushing", sector);
+				image_.writeSector(sector, buf.data_);
+				buf.modified_ = false;
 			}
 		}
 		image_.flush();
@@ -268,34 +289,26 @@ class BufferedImage
 
 	void close()
 	{
+		scope (exit) image_.close();
 		flush();
-		image_.close();
 	}
 
 	BufferedSector opIndex(uint sector)
 	{
-		return BufferedSector(this, sector);
+		auto buf = buffers_.get(sector, null);
+		if (buf !is null)
+			return buf;
+		return buffers_[sector] = new BufferedSector(this, sector);
 	}
 
 	void opIndexAssign(ubyte[] data, uint sector)
 	{
-		BufferedSector(this, sector) = data;
+		opIndex(sector) = data;
 	}
 
 private:
-	static class Buffer
-	{
-		this(ubyte[] data)
-		{
-			this.data = data;
-		}
-		
-		ubyte[] data;
-		bool modified;
-	}
-
 	Image image_;
-	Buffer[uint] buffers_;
+	BufferedSector[uint] buffers_;
 }
 
 version (unittest)
@@ -402,6 +415,6 @@ unittest
 		assert(img.readSector(i)[0] == 0);
 		assert(img.readSector(i)[1] == bimg[i][1], to!string(i));
 	}
-	//assert(collectException(bimg[0]));
-	//assert(collectException(bimg[sec + 1]));
+//	assert(collectException(bimg[0]) !is null);
+//	assert(collectException(bimg[sec + 1]) !is null);
 }

@@ -73,14 +73,25 @@ private:
 protected:
 	override void readSectorImpl(uint sector, ubyte[] buf)
 	{
+		debug (Atr) writefln("readSector %d (%d bytes)", sector, buf.length);
 		seek(sector);
 		file_.rawRead(buf);
 	}
 
 	override void writeSectorImpl(uint sector, in ubyte[] buf)
 	{
+		debug (Atr) writefln("writeSector %d (%d bytes)", sector, buf.length);
 		seek(sector);
+		debug (Atr) writefln("at %d", file_.tell);
 		file_.rawWrite(buf);
+		debug (Atr)
+		{
+			file_.flush();
+			seek(sector);
+			ubyte[] rbuf = new ubyte[buf.length];
+			file_.rawRead(rbuf);
+			assert(rbuf == buf);
+		}
 	}
 
 	override void openImpl(string path, bool readOnly)

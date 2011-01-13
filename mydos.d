@@ -23,12 +23,35 @@ import std.algorithm;
 import std.stream;
 import std.range;
 import std.conv;
-debug import std.stdio;
+import std.stdio;
 
 import image;
 import filesystem;
 import vtoc;
 import filename;
+
+private
+{
+	pure nothrow ubyte lobyte(uint x)
+	{
+		return x & 0xFF;
+	}
+
+	pure nothrow ubyte hibyte(uint x)
+	{
+		return (x >>> 8) & 0xFF;
+	}
+
+	enum EntryStatus : ubyte
+	{
+		DELETED = 0x80,
+		FILE = 0x42,
+		READONLY = 0x20,
+		DIRECTORY = 0x10,
+		LONGLINKS = 0x04,
+		NOTCLOSED = 0x01,
+	}
+}
 
 class MydosFileSystem : FileSystem
 {
@@ -55,7 +78,7 @@ class MydosFileSystem : FileSystem
 
 	override @property void label(string label)
 	{
-		throw new Exception("MyDos filesystem does not support setting volume label");
+		throw new FileSystemException("MyDos filesystem does not support setting volume label");
 	}
 
 	override @property DirRange rootDir()
@@ -81,34 +104,47 @@ class MydosFileSystem : FileSystem
 		vtoc.markSectors(vtocSectors);				// vtoc itself
 
 		ushort fs = cast(ushort) (image_.totalSectors - 3 - 8 - vtocSectors.length);
-		image_[360][0 .. 5] = [computeVtocMark(image_.totalSectors), fs & 0xff, fs >>> 8, fs & 0xff, fs >>> 8];
+		image_[360][0 .. 5] = [computeVtocMark(image_.totalSectors), lobyte(fs), hibyte(fs), lobyte(fs), hibyte(fs)];
 		image_.flush();
 	}
 
 	override void writeDosFiles(string ver)
 	{
-		debug writeln("Republica Portuguesa!");
-		
 		auto lver = tolower(ver);
-		if (lver.startsWith("mydos450") || lver.startsWith("450"))
+		switch (lver)
 		{
+		case "mydos450":
+		case "mydos450t":
+		case "450":
+		case "450t":
 			auto d1 = rootDir.openFile("DOS.SYS", "wb");
-			enforce(d1.write(dosSys_) == dosSys_.length);
+			enforce(d1.write(dosSys450t_[384 .. $]) == dosSys450t_.length - 384,
+				new FileSystemException("Error writing DOS.SYS"));
 			d1.close();
-			
 			auto d2 = rootDir.openFile("DUP.SYS", "wb");
-			enforce(d2.write(dupSys_) == dupSys_.length);
+			enforce(d2.write(dupSys450t_) == dupSys450t_.length,
+				new FileSystemException("Error writing DUP.SYS"));
 			d2.close();
+			auto init = dosSys450t_[0 .. 384].dup;
+			init[14] = image_.bytesPerSector == 256 ? 2 : 1;
+			uint first = (cast(MydosDirEntry) rootDir.find("DOS.SYS")).firstSector_;
+			init[15] = lobyte(first);
+			init[16] = hibyte(first);
+			init[17] = cast(ubyte) (image_.bytesPerSector - 3);
+			image_[1] = init[0 .. 128];
+			image_[2] = init[128 .. 256];
+			image_[3] = init[256 .. 384];
+			image_.flush();
+			break;
+		default:
+			throw new FileSystemException("Invalid or unsupported MyDOS version specified");
 		}
-		else
-			throw new Exception("Invalid or unsupported MyDOS version specified");
 	}
 
 	override void close()
 	{
 		image_.flush();
 	}
-
 
 	static this()
 	{
@@ -127,7 +163,6 @@ private:
 	this(BufferedImage img)
 	{
 		image_ = img;
-		std.stdio.writeln(image_[360][0 .. 10]);
 	}
 
 	static FileSystem detectMydos(BufferedImage img)
@@ -137,32 +172,35 @@ private:
 		return null;
 	}
 
-	@property void freeSectors_(uint fsec)
+	@property void freeSectors(uint fsec)
 	in
 	{
 		assert(fsec >= 0 && fsec < image_.totalSectors);
 	}
 	body
 	{
-		image_[360][3 .. 5] = [fsec & 0xFF, (fsec >>> 8) & 0xFF];
+		image_[360][3 .. 5] = [lobyte(fsec), hibyte(fsec)];
 	}
 
 	static ubyte computeVtocMark(uint sec)
 	{
-		return sec < 1024 ? 2 : ((sec / 8 + 10) >>> 8) & 0xFF;
+		return sec < 1024 ? 2 : hibyte(sec / 8 + 10);
 	}
 
 	BufferedImage image_;
 
-	immutable dosSys_ = cast(immutable(ubyte[])) import("mydos450t_dos.sys");
-	immutable dupSys_ = cast(immutable(ubyte[])) import("mydos450t_dup.sys");
+	static immutable dosSys450t_ = cast(immutable(ubyte[])) import("mydos450t_dos.sys");
+	static immutable dupSys450t_ = cast(immutable(ubyte[])) import("mydos450t_dup.sys");
+	
+//	static immutable dosSys453_ = cast(immutable(ubyte[])) import("mydos453_dos.sys");
+//	static immutable dupSys453_ = cast(immutable(ubyte[])) import("mydos453_dup.sys");
 }
 
 class MydosDirRange : DirRange
 {
 	override const @property bool empty()
 	{
-		return current_.sector >= lastSector_;
+		return current_ >= 64;
 	}
 	
 	override @property void popFront()
@@ -170,14 +208,15 @@ class MydosDirRange : DirRange
 		ubyte s;
 		do
 		{
-			current_ = next(current_);
-			s = fs_.image[current_.sector][current_.offset];
-		} while (current_.sector < lastSector_ && ((s & 0x80) || !s));
+			++current_;
+			Location loc = location(current_);
+			s = fs_.image[loc.sector][loc.offset];
+		} while (current_ < 64 && ((s & EntryStatus.DELETED) || !s));
 	}
 	
 	override @property MydosDirEntry front()
 	{
-		return new MydosDirEntry(fs_, current_);
+		return new MydosDirEntry(this, current_);
 	}
 
 	override @property MydosDirRange save()
@@ -191,26 +230,28 @@ class MydosDirRange : DirRange
 	
 	override void rewind()
 	{
-		current_ = Location(lastSector_ - 9, 128 - 16);
+		current_ = 255;
 		popFront();
 	}
 
+	// Create new empty file.
 	override MydosDirEntry createFile(string name)
 	{
-		debug writefln("createFile: %s", name);
 		auto de = cast(MydosDirEntry) find(name, false);
 		if (de)
 			de.remove();
 		else
-			de = new MydosDirEntry(fs_, firstFreeEntry());
-		de.stat_ = 0x46;
+			de = new MydosDirEntry(this, firstFreeEntry());
+		de.stat_ = fs_.image_[360][0] < 3 ?
+			EntryStatus.FILE :
+			EntryStatus.FILE | EntryStatus.LONGLINKS;
 		de.name = name;
 		return de;
 	}
 
 	override MydosDirEntry createDir(string name)
 	{
-		throw new Exception("createDir: Not implemented");
+		throw new FileSystemException("createDir: Not implemented");
 	}
 
 private:
@@ -219,20 +260,21 @@ private:
 	this(MydosFileSystem fs, uint firstSector)
 	{
 		fs_ = fs;
-		current_ = Location(firstSector - 1, 128 - 16);
+		current_ = 255; //-1; //Location(firstSector - 1, 128 - 16);
 		lastSector_ = firstSector + 8;
 		popFront();
 	}
 
-	Location firstFreeEntry()
+	ubyte firstFreeEntry()
 	{
-		for (auto loc = Location(lastSector_ - 8, 0); loc.sector < lastSector_; loc = next(loc))
+		for (ubyte i = 0; i < 64; ++i)
 		{
+			auto loc = location(i);
 			ubyte s = fs_.image[loc.sector][loc.offset];
-			if ((s & 0x80) || s == 0)
-				return loc;
+			if ((s & EntryStatus.DELETED) || s == 0)
+				return i;
 		}
-		throw new Exception("Directory full");
+		throw new FileSystemException("Directory full");
 	}
 
 	Location next(Location loc)
@@ -243,8 +285,13 @@ private:
 		return result;
 	}
 
+	Location location(ubyte index)
+	{
+		return Location(lastSector_ - 8 + (index / 8), (index % 8) * 16);
+	}
+
 	MydosFileSystem fs_;
-	Location current_;
+	ubyte current_;
 	uint lastSector_;
 }
 
@@ -261,47 +308,46 @@ class MydosDirEntry : DirEntry
 		sector_[location_.offset + 5 .. location_.offset + 16] = cast(ubyte[]) FileName(name).expand();
 	}
 
-	/// Size in bytes (upper limit).
+	/// Exact size in bytes.
 	override @property uint size()
 	{
-		auto entry = entry_;
-		if ((entry[0] & 0x46) == 0x46)
-			return (entry[1] | (entry[2] << 8)) * (fs_.image.bytesPerSector - 3);
-		else if ((entry[0] & 0x10) == 0x10)
-			return 8 * 128;
-		return 0;
+		auto bps = fs_.image.bytesPerSector;
+		if (isDir)
+			return 8 * bps;
+		if (sectorMap.length == 0)
+			return 0;
+		return (bps - 3) * (sectorMap.length - 1)
+			+ fs_.image[sectorMap[$ - 1]][bps - 1];
 	}
 	
 	override @property bool isDir()
 	{
-		return !!(stat_ & 0x10);
+		return !!(stat_ & EntryStatus.DIRECTORY);
 	}
 
 	override @property bool readOnly()
 	{
-		return !!(stat_ & 0x20);
+		return !!(stat_ & EntryStatus.READONLY);
 	}
 
 	override @property void readOnly(bool ro)
 	{
 		ubyte stat = stat_;
-		enforce(!stat & 0, "file is deleted");
+		enforce(!(stat & EntryStatus.DELETED), new FileSystemException("File is deleted"));
+		enforce(!!stat, new FileSystemException("Empty entry"));
 		auto sector = sector_;
-		sector[location_.offset] = ro ? (stat | 0x20) : (stat & 0xdf);
+		stat_ = ro ? (stat | EntryStatus.READONLY) : (stat & ~EntryStatus.READONLY);
 	}
 
-	override DirEntry parent()
+/*	override DirEntry parent()
 	{
 		return parent_;
-	}
+	}*/
 
 	override MydosFileStream openFile(bool readable, bool writeable, bool append)
 	{
-		debug writeln("AAA");
 		enforce(!isDir, this.name.fn ~ " is a directory");
 		enforce(!append, "Appending not implemented");
-				debug writeln("open ok");
-
 		return new MydosFileStream(this, readable, writeable, append);
 	}
 
@@ -313,39 +359,59 @@ class MydosDirEntry : DirEntry
 
 	override void remove()
 	{
-		throw new Exception("remove: Not implemented");
+		auto sm = sectorMap();
+		if (isDir)
+			enforce(openDir().empty, new FileSystemException("directory is not empty"));
+		stat_ = EntryStatus.DELETED;
+		fs_.freeSectors = fs_.freeSectors + sm.length;
+		(new MydosVtoc(fs_.image_)).markSectors(sm, true);
+		sectorMapValid_ = false;
 	}
 
-	uint[] readSectorMap()
+	@property uint[] sectorMap()
 	{
-		if (isDir)
-			return array(iota(firstSector_, firstSector_ + 8));
-		auto result = new uint[](sectorCount_);
-		debug writeln(result.length);
-		auto secn = firstSector_;
-		size_t l;
-		while (secn)
+		if (sectorMapValid_)
+			return sectorMap_;		
+		if (stat_ & EntryStatus.DELETED)
+			sectorMap_ = null;
+		else
 		{
-			auto sec = fs_.image_[secn][];
-			if (result.length <= l)
-				result.length = l + 1;
-			result[l] = secn;
-			secn = sec[$ - 3] << 8 | sec[$ - 2];
+			if (isDir)
+				sectorMap_ = array(iota(firstSector_, firstSector_ + 8));
+			else
+			{
+				bool indexed = fs_.image_[360][0] < 3;
+				sectorMap_ = new uint[](sectorCount_);
+				auto secn = firstSector_;
+				size_t l;
+				while (secn)
+				{
+					auto sec = fs_.image_[secn][];
+					if (sectorMap_.length <= l)
+						sectorMap_.length = l + 1;
+					sectorMap_[l++] = secn;
+					secn = sec[$ - 3] << 8 | sec[$ - 2];
+					if (indexed)
+						secn &= 0x3FF;
+				}
+			}
 		}
-		return result;
+		sectorMapValid_ = true;
+		return sectorMap_;
 	}
 
 private:
-	this(MydosFileSystem fs, Location location)
+	this(MydosDirRange parent, ubyte index)
 	in
 	{
-		assert(location.sector != 0);
-		assert(!(location.offset % 16));
+		assert(index < 64);
 	}
 	body
 	{
-		fs_ = fs;
-		location_ = location;
+		parent_ = parent;
+		fs_ = parent.fs_;
+		location_ = Location(parent_.lastSector_ - 8 + index / 8, (index % 8) * 16);
+		index_ = index;
 	}
 
 	@property BufferedSector sector_()
@@ -381,7 +447,8 @@ private:
 	}
 	body
 	{
-		fs_.image_[location_.sector][location_.offset + 3 .. location_.offset + 5] = [sector & 0xFF, (sector >>> 8) & 0xFF];
+		fs_.image_[location_.sector][location_.offset + 3 .. location_.offset + 5] =
+			[lobyte(sector), hibyte(sector)];
 	}
 
 	@property uint sectorCount_()
@@ -392,12 +459,16 @@ private:
 
 	@property void sectorCount_(uint sc)
 	{
-		fs_.image_[location_.sector][location_.offset + 1 .. location_.offset + 3] = [sc & 0xFF, (sc >>> 8) & 0xFF];
+		fs_.image_[location_.sector][location_.offset + 1 .. location_.offset + 3] =
+			[lobyte(sc), hibyte(sc)];
 	}
 
 	MydosFileSystem fs_;
 	Location location_;
-	DirEntry parent_;
+	ubyte index_;
+	MydosDirRange parent_;
+	uint[] sectorMap_;
+	bool sectorMapValid_;
 }
 
 class MydosFileStream : Stream
@@ -410,35 +481,22 @@ class MydosFileStream : Stream
 	}
 	body
 	{
-		size_t rsize;
-/*		while (rsize < size && thisSector_)
-		{
-			auto sec = requestSector(thisSector_);
-			size_t l = min(size - rsize, thisSectorLen_ - byteOffset_);
-			buffer[rsize .. rsize + l] = sec[byteOffset_ .. byteOffset_ + l];
-			assert ((byteOffset_ + l) <= thisSectorLen_);
-			if ((byteOffset_ += l) == thisSectorLen_)
-			{
-				prevSector_ = thisSector_;
-				thisSector_ = nextSector_;
-				byteOffset_ = 0;
-			}
-			rsize += l;
-		}*/
-		while (rsize < size && currSector_ < sectorMap_.length)
+		size_t bytesRead;
+		while (bytesRead < size && currSector_ < sectorMap_.length)
 		{
 			auto thisSectorLength_ = (currSector_ == sectorMap_.length - 1 ? bytesInLastSector_ : fileBytesPerSector_);
-			size_t l = min(size - rsize, thisSectorLength_ - currByte_);
-			buffer[rsize .. rsize + l] = fs_.image_[sectorMap_[currSector_]][currByte_ .. currByte_ + l];
+			size_t l = min(size - bytesRead, thisSectorLength_ - currByte_);
+			buffer[bytesRead .. bytesRead + l] =
+				fs_.image_[sectorMap_[currSector_]][currByte_ .. currByte_ + l];
 			assert ((currByte_ + l) <= thisSectorLength_);
 			if ((currByte_ += l) == thisSectorLength_)
 			{
 				++currSector_;
 				currByte_ = 0;
 			}
-			rsize += l;
+			bytesRead += l;
 		}
-		return rsize;
+		return bytesRead;
 	}
 
 	/// Write up to size bytes from buffer in the stream, returning the actual number of bytes that were written.
@@ -449,115 +507,87 @@ class MydosFileStream : Stream
 	}
 	body
 	{
-		debug writefln("writing %d bytes", size);
-		uint freeSectors = fs_.freeSectors;
+		if (append_)
+			seek(0, SeekPos.End);
+		ubyte fileIndex = cast(ubyte) (fs_.image_[360][0] < 3 ? (dirEntry_.index_ << 2) : 0);
+
 		uint allocCount = (filePosition_ + size + fileBytesPerSector_ - 1) / fileBytesPerSector_ - sectorMap_.length;
-		debug writefln("need to allocate %d sectors", allocCount);
+//		debug .writefln("need to allocate %d sectors", allocCount);
 		if (allocCount > 0)
 		{
 			auto vtoc = new MydosVtoc(fs_.image_);
 			auto allocSecs = vtoc.findFreeSectors(allocCount);
 			sectorMap_ ~= allocSecs;
-			freeSectors -= allocSecs.length;
+			if (!dirEntry_.firstSector_)
+				dirEntry_.firstSector_ = sectorMap_[0];
+			dirEntry_.sectorCount_ = sectorMap_.length;
+			dirEntry_.sectorMapValid_ = false;
+			vtoc.markSectors(allocSecs);
+			fs_.freeSectors = (fs_.freeSectors - allocSecs.length);
 		}
-		size_t wsize;
-		while (wsize < size && currSector_ < sectorMap_.length)
+		size_t bytesWritten;
+		while (bytesWritten < size && currSector_ < sectorMap_.length)
 		{
-			size_t l = min(size - wsize, fileBytesPerSector_ - currByte_);
-			fs_.image_[sectorMap_[currSector_]][currByte_ .. currByte_ + l] = (cast(ubyte*) buffer)[wsize .. wsize + l];
-			fs_.image_[sectorMap_[currSector_]][fileBytesPerSector_ .. fileBytesPerSector_ + 2] =
-				(currSector_ == sectorMap_.length - 1) ?
-				[cast(ubyte) 0, cast(ubyte) 0] :
-				[cast(ubyte) (sectorMap_[currSector_ + 1] >>> 8), cast(ubyte) (sectorMap_[currSector_ + 1] & 0xFF)];
-			fs_.image_[sectorMap_[currSector_]][fileBytesPerSector_ + 2] = cast(ubyte) l;
+			size_t l = min(size - bytesWritten, fileBytesPerSector_ - currByte_);
+			auto currentSector = fs_.image_[sectorMap_[currSector_]];
+			if (l == fileBytesPerSector_)
+				currentSector.alloc();
+			currentSector[currByte_ .. currByte_ + l] = 
+				(cast(ubyte*) buffer)[bytesWritten .. bytesWritten + l];
+			if (currSector_ == sectorMap_.length - 1)
+			{
+				currentSector[fileBytesPerSector_ .. fileBytesPerSector_ + 2] =
+					[fileIndex, cast(ubyte) 0];
+				bytesInLastSector_ = l;
+			}
+			else
+				currentSector[fileBytesPerSector_ .. fileBytesPerSector_ + 2] =
+					[hibyte(sectorMap_[currSector_ + 1]) | fileIndex, lobyte(sectorMap_[currSector_ + 1])];
+			currentSector[fileBytesPerSector_ + 2] = cast(ubyte) l;
 			if ((currByte_ += l) == fileBytesPerSector_)
 			{
 				++currSector_;
 				currByte_ = 0;
 			}
-			wsize += l;
+			bytesWritten += l;
 		}
-		dirEntry_.sectorCount_ = sectorMap_.length;
-		fs_.freeSectors_ = freeSectors;
-		
-		/*
-		// write to sector(s) already allocated for this file
-		while (wsize < size && thisSector_)
-		{
-			// we always need existing sector contents here because of link to next sector
-			auto sec = requestSector(thisSector_);
-			size_t l = min(size - wsize, fileBytesPerSector_ - byteOffset_);
-			assert ((byteOffset_ + l) <= fileBytesPerSector_);
-			sec[$ - 1] = cast(ubyte) (byteOffset_ + l);
-			sec[byteOffset_ .. byteOffset_ + l] = (cast(ubyte*) buffer)[wsize .. wsize + l];
-			fs_.image_[thisSector_][] = sec[];
-			if ((byteOffset_ += l) == fileBytesPerSector_)
-			{
-				prevSector_ = thisSector_;
-				thisSector_ = nextSector_;
-				byteOffset_ = 0;
-				++logSector_;
-			}
-			wsize += l;
-		}
-		// ...then allocate new sectors for remaining part of file
-		// and write data to them
-		if (!thisSector_)
-		{
-			auto vtoc = new MydosVtoc(fs_.image_);
-			uint allocCount = (size - wsize + fileBytesPerSector_ - 1) / fileBytesPerSector_;
-			auto allocSecs = vtoc.findFreeSectors(allocCount);
-			// update directory entry (if we just allocated first sector of file)
-			// or link in previous sector (for sectors #>=2)
-			if (prevSector_ == 0)
-				dirEntry_.firstSector_ = allocSecs[0];
-			else
-			{
-				auto secn = allocSecs[0];
-				fs_.image_[prevSector_][fileBytesPerSector_ .. fileBytesPerSector_ + 2] = [(secn >>> 8) & 0xFF, secn & 0xFF];
-			}
-			auto sec = new ubyte[fileBytesPerSector_ + 3];
-			// write data to sectors, excluding the last sector
-			foreach (i, secn; allocSecs[0 .. $ - 1])
-			{
-				sec[0 .. fileBytesPerSector_] = (cast(ubyte*) buffer) [wsize .. wsize + fileBytesPerSector_];
-				sec[fileBytesPerSector_ + 2] = cast(ubyte) fileBytesPerSector_;
-				auto nextSec = allocSecs[i + 1];
-				sec[fileBytesPerSector_ .. fileBytesPerSector_ + 2] = [(nextSec >>> 8) & 0xFF, nextSec & 0xFF];
-				fs_.image_[secn] = sec;
-				wsize += fileBytesPerSector_;
-			}
-			assert(size - wsize <= fileBytesPerSector_);
-			// write last allocated sector, update vtoc
-			size_t l = size - wsize;
-			sec[0 .. l] = (cast(ubyte*) buffer) [wsize .. size];
-			sec[$ - 1] = cast(ubyte) l;
-			fs_.image_[allocSecs[$ - 1]] = sec;
-			vtoc.markSectors(allocSecs);
-			// update pointers
-			wsize = size;
-			byteOffset_ = thisSectorLen_ = l;
-			dirEntry_.sectorCount_ = dirEntry_.sectorCount_ + allocSecs.length;
-			fs_.freeSectors_ = fs_.freeSectors - allocSecs.length;
-			prevSector_ = allocSecs[$ - 1];
-		}*/
-		return wsize;
+
+		return bytesWritten;
 	}
 	
 	override ulong seek(long offset, SeekPos whence)
 	{
-		throw new SeekException("seek not implemented");
+		auto sz = dirEntry_.size;
+		switch (whence)
+		{
+		case SeekPos.Set:
+			break;
+		case SeekPos.Current:
+			offset += fileBytesPerSector_ * currSector_ + currByte_;
+			break;
+		case SeekPos.End:
+			offset = sz - offset;
+			break;
+		default:
+			throw new SeekException("Wrong mode");
+		}
+		if (offset < 0 || offset > sz)
+			throw new SeekException("Seek offset out of bounds");
+		currSector_ = cast(uint) (offset / fileBytesPerSector_);
+		currByte_ = cast(uint) (offset % fileBytesPerSector_);
+		return offset;
 	}
 
 	override void close()
 	{
-		flush();
-		super.close();
+		if (this.writeable)
+			dirEntry_.stat_ = dirEntry_.stat_ & ~EntryStatus.NOTCLOSED;
+		scope (exit) super.close();
+		flush();		
 	}
 	
 	override void flush()
 	{
-		std.stdio.writeln(to!string(&this) ~ "flush");
 		super.flush();
 		fs_.image.flush();
 	}
@@ -565,7 +595,6 @@ class MydosFileStream : Stream
 private:
 	this(MydosDirEntry de, bool readable, bool writeable, bool append)
 	{
-		debug writefln("MydosFileStream: ", de.name);
 		this.readable = readable;
 		this.writeable = writeable;
 		this.seekable = true;
@@ -573,29 +602,13 @@ private:
 
 		dirEntry_ = de;
 		fs_ = de.fs_;
-		sectorMap_ = de.readSectorMap();
-		std.stdio.writeln(sectorMap_);
+		sectorMap_ = de.sectorMap;
 		if (sectorMap_.length)
 			bytesInLastSector_ = fs_.image_[sectorMap_[$ - 1]][][$ - 1];
-//		firstSector_ = de.firstSector_;
 		fileBytesPerSector_ = fs_.image_.bytesPerSector - 3;
-//		thisSector_ = firstSector_;
+		if (writeable)
+			dirEntry_.stat_ = dirEntry_.stat_ | EntryStatus.NOTCLOSED;
 	}
-
-/*	ubyte[] requestSector(uint sector)
-	{
-		if (sector)
-		{
-			auto buf = fs_.image_[thisSector_][];
-			thisSectorLen_ = buf[$ - 1];
-			nextSector_ = buf[$ - 2] | (buf[$ - 3] << 8);
-			enforce((thisSectorLen_ == fileBytesPerSector_) ^ (nextSector_ == 0), "file link corrupted");
-			return buf;
-		}
-		thisSectorLen_ = 0;
-		nextSector_ = 0;
-		return [];
-	}*/
 
 	@property size_t fileSize_()
 	{
@@ -613,16 +626,6 @@ private:
 	size_t fileBytesPerSector_;
 
 	uint[] sectorMap_;
-
-/*	uint firstSector_;
-	uint prevSector_;
-	uint thisSector_;
-	uint nextSector_;
-	uint logSector_;
-
-	uint byteOffset_;
-	uint thisSectorLen_;
-	uint fileBytesPerSector_;*/
 
 	bool append_;
 
@@ -659,18 +662,8 @@ private:
 
 unittest
 {
-/*	auto img = Image.create("", "Array", 720, 256, 3);
+	auto img = Image.create("", "Array", 720, 256, 3);
 	auto bimg = new BufferedImage(img);
 	auto fs = FileSystem.create(bimg, "Mydos");
-	auto f1de = fs.rootDir.createFile("file1");
-	auto f1 = f1de.openFile(false, true); 
-	f1.write(new ubyte[1024]);
-	assert(f1.position() == 1024);
-	f1.close();
-	assert(f1de.size >= 1024);
-	f1 = fs.rootDir.openFile("file1", "rb");
-	assert(f1.position() == 0);
-	f1.read(new ubyte[512]);
-	assert(f1.position() == 512);
-	f1.close();*/
+	unittestFileSystem(fs);
 }
