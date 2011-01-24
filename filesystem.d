@@ -230,7 +230,8 @@ interface DirRange
 			if (entry.name.match(name))
 				return entry;
 		}
-		enforce(!doThrow, new FileSystemException(name ~ " not found"));
+		if (doThrow)
+			throw new FileSystemException(name ~ " not found");
 		return null;
 	}
 	
@@ -260,30 +261,38 @@ interface DirRange
 version (unittest)
 {
 	import std.random;
-
+	import std.stdio;
+	
 	void unittestFileSystem(FileSystem fs)
 	{
 		auto freeSec = fs.freeSectors;
 		auto secSize = fs.image.bytesPerSector;
-		
-		auto rnd = Random(unpredictableSeed);
-		auto arr = new ubyte[freeSec * secSize / 2];
-		foreach (ref b; arr)
-		{
-			b = cast(ubyte) uniform(0, 256, rnd);
-		}
+		auto rnd = Random(0);
 
-		auto exc = collectException(fs.rootDir.openFile("blah", "r"));
-		assert((cast(FileSystemException) exc) !is null,
-			exc.classinfo.name ~ ": " ~ exc.msg);
-		auto fw = fs.rootDir.openFile("blah", "w");
-		fw.write(arr);
-		fw.close();
-		
-		assert(fs.freeSectors < freeSec);
-		auto fr = fs.rootDir.openFile("blah", "r");
-		auto rarr = new ubyte[arr.length + 1];
-		fr.read(rarr);
-		fr.close();
+		// sprawdzic rozmiary plikow od 0 do takiego ktory sie przestanie miescic na dysku
+		for (uint fsz = 0; fsz < freeSec * secSize / 2; ++fsz)
+		{
+			auto arr = new ubyte[fsz];
+			foreach (ref b; arr)
+			{
+				b = cast(ubyte) uniform(0, 256, rnd);
+			}
+			auto exc = collectException(fs.rootDir.openFile("blah", "r"));
+			assert(exc !is null, "file exists!");
+			assert((cast(FileSystemException) exc) !is null,
+				exc.classinfo.name ~ ": " ~ exc.msg);
+			auto fw = fs.rootDir.openFile("blah", "w");
+			for (size_t i = 0; i < arr.length; i += 100)
+			{
+				fw.write(arr[i .. i + 100 > arr.length ? arr.length : i + 100]);
+			}
+			fw.close();
+			assert(fs.rootDir.find("blah").size == fsz, format("expected=%d, actual=%d", fsz, fs.rootDir.find("blah").size));
+			auto fr = fs.rootDir.openFile("blah", "r");
+			auto rarr = new ubyte[arr.length + 1];
+			fr.read(rarr);
+			fr.close();
+			fs.rootDir.find("blah").remove();
+		}
 	}
 }
