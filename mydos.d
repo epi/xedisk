@@ -242,6 +242,7 @@ class MydosDirRange : DirRange
 			de.remove();
 		else
 			de = new MydosDirEntry(this, firstFreeEntry());
+		de.clear();
 		de.stat_ = fs_.image_[360][0] < 3 ?
 			EntryStatus.FILE :
 			EntryStatus.FILE | EntryStatus.LONGLINKS;
@@ -359,13 +360,17 @@ class MydosDirEntry : DirEntry
 
 	override void remove()
 	{
+		if (stat_ & EntryStatus.DELETED)
+			throw new FileSystemException("Already deleted");
 		auto sm = sectorMap();
 		if (isDir)
-			enforce(openDir().empty, new FileSystemException("directory is not empty"));
+			enforce(openDir().empty, new FileSystemException("Directory is not empty"));
 		stat_ = EntryStatus.DELETED;
 		fs_.freeSectors = fs_.freeSectors + sm.length;
 		(new MydosVtoc(fs_.image_)).markSectors(sm, true);
-		sectorMapValid_ = false;
+		sectorMap_ = null;
+		sectorMapValid_ = true;
+		fs_.image.flush();
 	}
 
 	@property uint[] sectorMap()
@@ -414,6 +419,11 @@ private:
 		index_ = index;
 	}
 
+	void clear()
+	{
+		fs_.image_[location_.sector][location_.offset .. location_.offset + 16] = 0;
+	}
+
 	@property BufferedSector sector_()
 	{
 		return fs_.image_[location_.sector];
@@ -447,22 +457,22 @@ private:
 	}
 	body
 	{
-		fs_.image_[location_.sector][location_.offset + 3 .. location_.offset + 5] =
+		sector_[location_.offset + 3 .. location_.offset + 5] =
 			[lobyte(sector), hibyte(sector)];
 	}
 
 	@property uint sectorCount_()
 	{
-		auto b = fs_.image_[location_.sector][location_.offset + 1 .. location_.offset + 3];
+		auto b = sector_[location_.offset + 1 .. location_.offset + 3];
 		return b[0] | (b[1] << 8);
 	}
 
 	@property void sectorCount_(uint sc)
 	{
-		fs_.image_[location_.sector][location_.offset + 1 .. location_.offset + 3] =
+		sector_[location_.offset + 1 .. location_.offset + 3] =
 			[lobyte(sc), hibyte(sc)];
 	}
-
+	
 	MydosFileSystem fs_;
 	Location location_;
 	ubyte index_;
@@ -510,7 +520,6 @@ class MydosFileStream : Stream
 		if (append_)
 			seek(0, SeekPos.End);
 		ubyte fileIndex = cast(ubyte) (fs_.image_[360][0] < 3 ? (dirEntry_.index_ << 2) : 0);
-
 		uint allocCount = (filePosition_ + size + fileBytesPerSector_ - 1) / fileBytesPerSector_ - sectorMap_.length;
 //		debug .writefln("need to allocate %d sectors", allocCount);
 		if (allocCount > 0)
@@ -534,17 +543,18 @@ class MydosFileStream : Stream
 				currentSector.alloc();
 			currentSector[currByte_ .. currByte_ + l] = 
 				(cast(ubyte*) buffer)[bytesWritten .. bytesWritten + l];
+			currByte_ += l;
 			if (currSector_ == sectorMap_.length - 1)
 			{
 				currentSector[fileBytesPerSector_ .. fileBytesPerSector_ + 2] =
 					[fileIndex, cast(ubyte) 0];
-				bytesInLastSector_ = l;
+				bytesInLastSector_ = currByte_;
 			}
 			else
 				currentSector[fileBytesPerSector_ .. fileBytesPerSector_ + 2] =
 					[hibyte(sectorMap_[currSector_ + 1]) | fileIndex, lobyte(sectorMap_[currSector_ + 1])];
-			currentSector[fileBytesPerSector_ + 2] = cast(ubyte) l;
-			if ((currByte_ += l) == fileBytesPerSector_)
+			currentSector[fileBytesPerSector_ + 2] = cast(ubyte) currByte_;
+			if (currByte_ == fileBytesPerSector_)
 			{
 				++currSector_;
 				currByte_ = 0;
