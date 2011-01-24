@@ -22,10 +22,10 @@ XEDISK_EXE=xedisk$(EXESUFFIX)
 
 all: $(XEDISK_EXE) xedisk.html
 
-windist: xedisk-$(VERSION)-windows.zip
-	
 debug:
-	$(MAKE) DC="dmd -debug -unittest -g -w -wi -ofdebug_$(XEDISK_EXE)"
+	$(MAKE) DC="dmd -debug -unittest -g -w -wi -of$(XEDISK_EXE)" all
+
+windist: xedisk-$(VERSION)-windows.zip
 
 $(XEDISK_EXE): $(SOURCES)
 	$(DC) $(SOURCES) -Jdos
@@ -41,5 +41,7 @@ xedisk-$(VERSION)-windows.zip: xedisk.exe xedisk.html
 
 clean:
 	$(RM) $(XEDISK_EXE) xedisk.o $(SOURCES:.d=.obj) $(SOURCES:.d=.map) xedisk.html xedisk-$(VERSION)-windows.zip
+
+.PHONY: clean debug
 
 .DELETE_ON_ERROR:
