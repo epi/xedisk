@@ -25,7 +25,7 @@ import std.getopt: getopt, config;
 import std.exception: enforce;
 import std.file: exists, isfile, mkdir, listdir;
 import std.algorithm: max;
-import std.path: isabs;
+import std.path: isabs, basename;
 
 import image;
 import filesystem;
@@ -218,6 +218,12 @@ void add(string[] args)
 	void copyFile(DirRange dr, string fname)
 	{
 		writeln(fname);
+		auto ofile = dr.openFile(basename(fname), "wb");
+		scope (exit) ofile.close();
+		auto ifile = File(fname, "rb");
+		auto blk = new ubyte[4096];
+		for (ubyte[] rblk; (rblk = ifile.rawRead(blk)).length > 0; )
+			ofile.write(rblk);
 	}
 
 	bool addOne(std.file.DirEntry* de)
@@ -257,10 +263,11 @@ void add(string[] args)
 
 	foreach (fname; args[3 .. $])
 	{
+		writeln(fname);
 		if (std.file.isdir(fname))
-			copyFile(destDirRange, fname);
-		else
 			listdir(fname, &addOne);
+		else
+			copyFile(destDirRange, fname);
 //		listDir(&addOne, fname);
 	}
 }
