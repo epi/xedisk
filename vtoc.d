@@ -93,7 +93,7 @@ interface Vtoc
 		foreach (sector; sectors)
 		{
 			if (this[sector] == free)
-				throw new Exception(format("Sector %d already occupied", sector));
+				throw new Exception(format("Sector %d already %s", sector, free ? "free" : "occupied"));
 		}
 		foreach (sector; sectors)
 			this[sector] = free;
