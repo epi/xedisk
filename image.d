@@ -187,6 +187,13 @@ class BufferedSector
 		modified_ = true;
 	}
 
+	void opSliceAssign(ubyte data)
+	{
+		data_[] = data;
+		modified_ = true;
+		valid_ = true;
+	}
+
 	void opSliceAssign(in ubyte[] data)
 	in
 	{
@@ -197,6 +204,23 @@ class BufferedSector
 		data_ = data.dup;
 		modified_ = true;
 		valid_ = true;
+	}
+
+	void opSliceAssign(ubyte data, size_t begin, size_t end)
+	in
+	{
+		assert(end >= begin && end <= size_);
+	}
+	body
+	{
+		if (begin == 0 && end == size_)
+			this[] = data;
+		else
+		{
+			request();
+			data_[begin .. end] = data;
+		}
+		modified_ = true;
 	}
 
 	void opSliceAssign(in ubyte[] data, size_t begin, size_t end)
