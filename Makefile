@@ -3,8 +3,7 @@ SOURCES = xedisk.d image.d filesystem.d atr.d mydos.d sparta.d filename.d vtoc.d
 
 DC = dmd -O -release -inline -Dddoc -of$@
 ASCIIDOC = asciidoc -o $@ -a doctime
-ASCIIDOC_POSTPROCESS = perl -pi.bak -e "s/527bbd;/20a0a0;/;END{unlink '$@.bak'}" $@
-ASCIIDOC_VALIDATE = xmllint --valid --noout --nonet $@
+#ASCIIDOC_VALIDATE = xmllint --valid --noout --nonet $@
 ZIP = 7z a -mx=9 -tzip $@
 RM = rm -f
 
@@ -32,7 +31,6 @@ $(XEDISK_EXE): $(SOURCES)
 
 xedisk.html: README.asciidoc
 	$(ASCIIDOC) $<
-	$(ASCIIDOC_POSTPROCESS)
 	$(ASCIIDOC_VALIDATE)
 
 xedisk-$(VERSION)-windows.zip: xedisk.exe xedisk.html
