@@ -18,14 +18,14 @@
 	These rights, on this notice, rely.
 */
 
-import std.stdio: File, write, writeln, writefln;
-import std.string: tolower, lastIndexOf, startsWith;
+import std.stdio: File, write, writeln, writefln, stderr;
+import std.string: toLower, lastIndexOf, startsWith;
 import std.conv: to;
 import std.getopt: getopt, config;
 import std.exception: enforce;
-import std.file: exists, isfile, mkdir, listdir;
+import std.file: exists, isFile, mkdir, mkdirRecurse, dirEntries;
 import std.algorithm: max;
-import std.path: isabs, basename;
+import std.path: isabs, baseName;
 
 import image;
 import filesystem;
@@ -148,40 +148,68 @@ void extract(string[] args)
 	string destDir;
 	bool lowerCase;
 	bool verbose;
+	bool ignoreReadErrors;
 
 	getopt(args,
 		config.caseSensitive,
 		"v|verbose", &verbose,
 		"c|lowercase", &lowerCase,
+		"g|ignore-read-errors", &ignoreReadErrors,
 		"D|dest-dir", &destDir);
 	if (destDir.length)
+	{
+		if (!exists(destDir))
+			mkdirRecurse(destDir);
 		destDir ~= "/";
+	}
 
 	enforce(args.length >= 4, "No source files specified");
 
 	bool extractOne(DirEntry dirEntry)
 	{
-		writeln(destDir ~ dirEntry.name.fn);
-		if (dirEntry.isDir)
+		string name;
+		try
 		{
-			auto idir = dirEntry.openDir();
-			destDir ~= lowerCase ? tolower(dirEntry.name.fn) : dirEntry.name.fn;
-			if (!exists(destDir))
-				mkdir(destDir);
-			destDir ~= "/";
-			foreach (de; idir)
-				extractOne(de);
-			writeln(destDir);
-			destDir = destDir[0 .. max(lastIndexOf(destDir[0 .. $ - 1], "/"), 0)];
+			if (dirEntry.isDir)
+			{
+				auto destDirLen = destDir.length;
+				destDir ~= lowerCase ? toLower(dirEntry.name.fn) : dirEntry.name.fn;
+				name = destDir;
+				if (verbose)
+					writeln("Creating directory ", destDir);
+				if (!exists(destDir))
+					mkdir(destDir);
+				destDir ~= "/";
+				foreach (de; dirEntry.openDir())
+				{
+					if (!extractOne(de))
+						return false;
+				}
+				destDir = destDir[0 .. destDirLen];
+			}
+			else
+			{
+				name = destDir ~ (lowerCase ? toLower(dirEntry.name.fn) : dirEntry.name.fn);
+				if (verbose)
+					writeln("Extracting ", name);
+				auto ifile = dirEntry.openFile(true, false, false);
+				scope (exit) ifile.close();
+				auto ofile = File(name, "wb");
+				auto blk = new ubyte[4096];
+				for (size_t len; (len = ifile.read(blk)) > 0; )
+					ofile.rawWrite(blk[0 .. len]);
+			}
 		}
-		else
+		catch (Exception e)
 		{
-			auto ifile = dirEntry.openFile(true, false, false);
-			scope (exit) ifile.close();
-			auto ofile = File(destDir ~ (lowerCase ? tolower(dirEntry.name.fn) : dirEntry.name.fn), "wb");
-			auto blk = new ubyte[4096];
-			for (size_t len; (len = ifile.read(blk)) > 0; )
-				ofile.rawWrite(blk[0 .. len]);
+			if (!verbose)
+				stderr.writeln("File:  ", name);
+			stderr.writeln("Error: ", e.msg);
+			if (!ignoreReadErrors)
+			{
+				stderr.writeln("Use -g to skip any corrupted files in the disk image");
+				return false;
+			}
 		}
 		return true;
 	}
@@ -218,7 +246,7 @@ void add(string[] args)
 	void copyFile(DirRange dr, string fname)
 	{
 		writeln(fname);
-		auto ofile = dr.openFile(basename(fname), "wb");
+		auto ofile = dr.openFile(baseName(fname), "wb");
 		scope (exit) ofile.close();
 		auto ifile = File(fname, "rb");
 		auto blk = new ubyte[4096];
@@ -226,21 +254,24 @@ void add(string[] args)
 			ofile.write(rblk);
 	}
 
-	bool addOne(std.file.DirEntry* de)
+/*	bool addOne(std.file.DirEntry* de)
 	{
 		writeln(de.name);
-		if (de.isdir)
-			listdir(de.name, &addOne);
+		if (de.isDir)
+		{
+			foreach (DirEntry nde; dirEntries(de.name))
+				addOne(nde);
+		}
 		else
 			copyFile(destDirRange, de.name);
 		return true;
-	}
+	}*/
 
 /*		writeln(destDir ~ dirEntry.name.fn);
 		if (dirEntry.isDir)
 		{
 			auto idir = dirEntry.openDir();
-			destDir ~= lowerCase ? tolower(dirEntry.name.fn) : dirEntry.name.fn;
+			destDir ~= lowerCase ? toLower(dirEntry.name.fn) : dirEntry.name.fn;
 			if (!exists(destDir))
 				mkdir(destDir);
 			destDir ~= "/";
@@ -253,7 +284,7 @@ void add(string[] args)
 		{
 			auto ifile = dirEntry.openFile(true, false, false);
 			scope (exit) ifile.close();
-			auto ofile = File(destDir ~ (lowerCase ? tolower(dirEntry.name.fn) : dirEntry.name.fn), "wb");
+			auto ofile = File(destDir ~ (lowerCase ? toLower(dirEntry.name.fn) : dirEntry.name.fn), "wb");
 			auto blk = new ubyte[4096];
 			for (size_t len; (len = ifile.read(blk)) > 0; )
 				ofile.rawWrite(blk[0 .. len]);
@@ -264,9 +295,9 @@ void add(string[] args)
 	foreach (fname; args[3 .. $])
 	{
 		writeln(fname);
-		if (std.file.isdir(fname))
-			listdir(fname, &addOne);
-		else
+//		if (std.file.isDir(fname))
+//			listdir(fname, &addOne);
+//		else
 			copyFile(destDirRange, fname);
 //		listDir(&addOne, fname);
 	}
@@ -298,6 +329,7 @@ void printHelp(string[] args)
 		"  Extract file[s] and/or directories from disk image.\n" ~
 		" -v|--verbose               list names of extracted files\n" ~
 		" -c|--lowercase             change case of all names to lowercase\n" ~
+		" -g|--ignore-read-errors    continue after trying to read a corrupted file\n" ~
 		" -D|--dest-dir=dest         specify destination directory, default is\n" ~
 		"                            current working directory\n\n",
 		args[0], " a[dd] [-D=dest] disk_image_file files...\n" ~
@@ -337,7 +369,7 @@ int main(string[] args)
 	}
 	catch (Exception e)
 	{
-		writeln("Ooops! " ~ e.msg);
+		stderr.writeln("Ooops! " ~ e.msg);
 		return 1;
 	}
 }
