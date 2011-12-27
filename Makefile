@@ -1,5 +1,5 @@
 VERSION = 1.0.0
-SOURCES = xedisk.d image.d filesystem.d atr.d mydos.d filename.d vtoc.d
+SOURCES = xedisk.d image.d filesystem.d atr.d mydos.d sparta.d filename.d vtoc.d
 
 DC = dmd -O -release -inline -Dddoc -of$@
 ASCIIDOC = asciidoc -o $@ -a doctime
