@@ -25,27 +25,20 @@ import std.range;
 
 import image;
 
-/// Interface for dealing with VTOC.
-interface Vtoc
+/// Abstract class for dealing with VTOC.
+class Vtoc
 {
-	/// Compute location (_sector # and byte offset inside the _sector)
-	/// of byte containing information on whether the sector is occupied.
-	/// Returns: location within VTOC
-	@property Location sectorLocation(uint sector);
-
-	/// Returns: byte value in which the only bit set is the one corresponding
-	/// to the sector within the byte determined by sectorLocation;
-	@property ubyte sectorBitMask(uint sector);
-
-	/// Returns: underlying disk image.
-	@property BufferedImage image();
+	this(BufferedImage image)
+	{
+		image_ = image;
+	}
 
 	/// Returns: true if sector is free, false if it is occupied.
 	final bool opIndex(uint sector)
 	{
-		enforce(sector >= 0 && sector <= image.totalSectors, "Sector # out of range (" ~ to!string(sector) ~ ")");
+		enforce(sector >= 0 && sector <= image_.totalSectors, "Sector # out of range (" ~ to!string(sector) ~ ")");
 		auto loc = sectorLocation(sector);
-		ubyte b = image[loc.sector][loc.offset % image.bytesPerSector];
+		ubyte b = image_[loc.sector][loc.offset % image_.bytesPerSector];
 		return !!(b & sectorBitMask(sector));
 	}
 
@@ -55,14 +48,14 @@ interface Vtoc
 	/// Returns: free.
 	final void opIndexAssign(bool free, uint sector)
 	{
-		enforce(sector >= 0 && sector <= image.totalSectors, "Sector # out of range (" ~ to!string(sector) ~ ")");
+		enforce(sector >= 0 && sector <= image_.totalSectors, "Sector # out of range (" ~ to!string(sector) ~ ")");
 		auto loc = sectorLocation(sector);
-		ubyte b = image[loc.sector][loc.offset % image.bytesPerSector];
+		ubyte b = image_[loc.sector][loc.offset % image_.bytesPerSector];
 		auto mask = sectorBitMask(sector);
 		b &= ~mask;
 		if (free)
 			b |= mask;
-		image[loc.sector][loc.offset] = b;
+		image_[loc.sector][loc.offset] = b;
 	}
 
 	/// Find free sectors in VTOC starting from the first full-sized sector in the underlying disk image.
@@ -74,7 +67,7 @@ interface Vtoc
 	{
 		auto result = new uint[count];
 		size_t l;
-		for (uint sector = image.singleDensitySectors + 1; l < count && sector <= image.totalSectors; ++sector)
+		for (uint sector = image_.singleDensitySectors + 1; l < count && sector <= image_.totalSectors; ++sector)
 		{
 			if (this[sector])
 				result[l++] = sector;
@@ -110,14 +103,14 @@ interface Vtoc
 		size_t l;
 		uint maxL;
 		uint firstSec;
-		foreach (sector; image.singleDensitySectors + 1 .. image.totalSectors - count + 1)
+		foreach (sector; image_.singleDensitySectors + 1 .. image_.totalSectors - count + 1)
 		{
 			if (!this[sector])
 			{
 				if (l > maxL)
 				{
-					firstSec = sector - l;
-					maxL = l;
+					firstSec = cast(uint) (sector - l);
+					maxL = cast(uint) l;
 				}
 				l = 0;
 			}
@@ -130,4 +123,17 @@ interface Vtoc
 		}
 		return array(iota(firstSec, firstSec + maxL + 1));
 	}
+
+protected:
+	/// Compute location (_sector # and byte offset inside the _sector)
+	/// of byte containing information on whether the sector is occupied.
+	/// Returns: location within VTOC
+	abstract @property Location sectorLocation(uint sector);
+
+	/// Returns: byte value in which the only bit set is the one corresponding
+	/// to the sector within the byte determined by sectorLocation;
+	abstract @property ubyte sectorBitMask(uint sector);
+
+	/// Returns: underlying disk image.
+	BufferedImage image_;
 }
