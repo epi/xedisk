@@ -106,7 +106,7 @@ protected:
 private:
 	static Image newObj(string path, string type)
 	{
-		auto image = cast(Image) Object.factory(tolower(type) ~ "." ~ capitalize(type) ~ "Image");
+		auto image = cast(Image) Object.factory(toLower(type) ~ "." ~ capitalize(type) ~ "Image");
 		version (unittest)
 		{
 			if (image is null)
@@ -369,13 +369,13 @@ version (unittest)
 
 		override void readSectorImpl(uint sector, ubyte[] buf)
 		{
-			uint s = seek(sector);
+			size_t s = seek(sector);
 			buf[] = storage_[s .. s + buf.length];
 		}
 
 		override void writeSectorImpl(uint sector, in ubyte[] buf)
 		{
-			uint s = seek(sector);
+			size_t s = seek(sector);
 			storage_[s .. s + buf.length] = buf[];
 		}
 

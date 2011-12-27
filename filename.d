@@ -21,16 +21,16 @@ struct FileName
 		{
 			foreach (c; str)
 				fn ~= (c >= 0x20 && c <= 0x7E) ? c : '_';
-			fn = fn.stripr();
+			fn = fn.stripRight();
 		}
 		
 		custr(rawname);
 		fn = fn ~ ".";
 		custr(rawext);
-		fn = fn.stripr().chomp(".");
+		fn = fn.stripRight().chomp(".");
 	}
 
-	string expand()
+	immutable(ubyte[]) expand()
 	{
 		auto result = new char[11];
 		size_t i, j;
@@ -55,14 +55,14 @@ struct FileName
 		}
 		while (i < 11)
 			result[i++] = ' ';
-		toupperInPlace(result);
-		return result.idup;
+		toUpperInPlace(result);
+		return cast(immutable(ubyte[])) result.idup;
 	}
 	
 	bool match(string mask)
 	{
-		auto efn = expand();
-		auto em = FileName(mask).expand();
+		auto efn = cast(string) expand();
+		auto em = cast(string) FileName(mask).expand();
 		assert (efn.length == em.length, "|" ~ efn ~ "|" ~ em ~ "|");
 		foreach (i, m; em)
 		{

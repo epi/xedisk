@@ -110,7 +110,7 @@ class MydosFileSystem : FileSystem
 
 	override void writeDosFiles(string ver)
 	{
-		auto lver = tolower(ver);
+		auto lver = toLower(ver);
 		switch (lver)
 		{
 		case "mydos450":
@@ -317,8 +317,8 @@ class MydosDirEntry : DirEntry
 			return 8 * bps;
 		if (sectorMap.length == 0)
 			return 0;
-		return (bps - 3) * (sectorMap.length - 1)
-			+ fs_.image[sectorMap[$ - 1]][bps - 1];
+		return cast(uint) ((bps - 3) * (sectorMap.length - 1)
+			+ fs_.image[sectorMap[$ - 1]][bps - 1]);
 	}
 	
 	override @property bool isDir()
@@ -366,7 +366,7 @@ class MydosDirEntry : DirEntry
 		if (isDir)
 			enforce(openDir().empty, new FileSystemException("Directory is not empty"));
 		stat_ = EntryStatus.DELETED;
-		fs_.freeSectors = fs_.freeSectors + sm.length;
+		fs_.freeSectors = cast(uint) (fs_.freeSectors + sm.length);
 		(new MydosVtoc(fs_.image_)).markSectors(sm, true);
 		sectorMap_ = null;
 		sectorMapValid_ = true;
@@ -520,7 +520,7 @@ class MydosFileStream : Stream
 		if (append_)
 			seek(0, SeekPos.End);
 		ubyte fileIndex = cast(ubyte) (fs_.image_[360][0] < 3 ? (dirEntry_.index_ << 2) : 0);
-		uint allocCount = (filePosition_ + size + fileBytesPerSector_ - 1) / fileBytesPerSector_ - sectorMap_.length;
+		uint allocCount = cast(uint) ((filePosition_ + size + fileBytesPerSector_ - 1) / fileBytesPerSector_ - sectorMap_.length);
 //		debug .writefln("need to allocate %d sectors", allocCount);
 		if (allocCount > 0)
 		{
@@ -529,10 +529,10 @@ class MydosFileStream : Stream
 			sectorMap_ ~= allocSecs;
 			if (!dirEntry_.firstSector_)
 				dirEntry_.firstSector_ = sectorMap_[0];
-			dirEntry_.sectorCount_ = sectorMap_.length;
+			dirEntry_.sectorCount_ = cast(uint) sectorMap_.length;
 			dirEntry_.sectorMapValid_ = false;
 			vtoc.markSectors(allocSecs);
-			fs_.freeSectors = (fs_.freeSectors - allocSecs.length);
+			fs_.freeSectors = cast(uint) ((fs_.freeSectors - allocSecs.length));
 		}
 		size_t bytesWritten;
 		while (bytesWritten < size && currSector_ < sectorMap_.length)
@@ -647,7 +647,7 @@ class MydosVtoc : Vtoc
 {
 	this(BufferedImage img)
 	{
-		image_ = img;
+		super(img);
 	}
 
 	override @property Location sectorLocation(uint sector)
@@ -660,14 +660,6 @@ class MydosVtoc : Vtoc
 	{
 		return 0x80 >>> (sector % 8);
 	}
-
-	override @property BufferedImage image()
-	{
-		return image_;
-	}
-
-private:
-	BufferedImage image_;
 }
 
 unittest

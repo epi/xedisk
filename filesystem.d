@@ -60,7 +60,7 @@ interface FileSystem
     ///  A FileSystem object of initialized filesystem.
 	static FileSystem create(BufferedImage img, string name)
 	{
-		auto fs = cast(FileSystem) Object.factory(tolower(name) ~ "." ~ capitalize(name) ~ "FileSystem");
+		auto fs = cast(FileSystem) Object.factory(toLower(name) ~ "." ~ capitalize(name) ~ "FileSystem");
 		enforce(fs !is null, new FileSystemException("Unknown filesystem: " ~ name ~ " - cannot create"));
 		fs.image = img;
 		fs.initialize();
@@ -101,7 +101,7 @@ interface FileSystem
 	{
 		if (!path.length)
 			path = "/*.*";
-		else if (path.stripr()[$ - 1] == '/')
+		else if (path.stripRight()[$ - 1] == '/')
 			path = path ~ "*.*";
 		
 		auto spath = splitPath(path);
