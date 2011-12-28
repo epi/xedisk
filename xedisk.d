@@ -305,40 +305,79 @@ void add(string[] args)
 
 void printHelp(string[] args)
 {
-	write(
-		"Atari XL/XE Disk Image Utility\n" ~
-		"\nGeneral usage:\n",
-		args[0], " command [disk_image_file] [options] [files...]\n" ~
-		"\nAvailable commands:\n\n",
-		args[0], " i[nfo] disk_image_file\n" ~
-		"  Show basic image information.\n\n",
-		args[0], " l[s]|l[ist] [-v] disk_image_file [path]\n" ~ 
-		"  List files in given directory (default is root)\n" ~
-		" -v|--verbose               use long output format\n\n",
-		args[0], " n[ew] disk_image_file [-F=fs] [-b=bps] [-s=sec]\n" ~ 
-		"  Create empty disk image.\n" ~
-		" -F|--filesystem=fs         initialize with specified filesystem\n" ~
-		" -b|--bytes-per-sector=bps  set number of bytes per sector for created\n" ~
-		"                            image; default is 256\n" ~
-		" -s|--total-sectors=sec     set total number of sectors for created image;\n" ~
-		"                            default is 720\n\n",
-		args[0], " b[oot] disk_image_file -d=version\n" ~
-		"  Write DOS files to disk image.\n" ~
-		" -d|--dos-version=version   specify DOS version, e.g. \"mydos450t\"\n\n",
-		args[0], " e[xtract] [-D=dest] disk_image_file files...\n" ~
-		"  Extract file[s] and/or directories from disk image.\n" ~
-		" -v|--verbose               list names of extracted files\n" ~
-		" -c|--lowercase             change case of all names to lowercase\n" ~
-		" -g|--ignore-read-errors    continue after trying to read a corrupted file\n" ~
-		" -D|--dest-dir=dest         specify destination directory, default is\n" ~
-		"                            current working directory\n\n",
-		args[0], " a[dd] [-D=dest] disk_image_file files...\n" ~
-		"  Copy file[s] and/or directories to disk image.\n" ~
-		" -v|--verbose               list names of copied files\n" ~
-		" -D|--dest-dir=dest         specify destination directory within image\n\n",
-		args[0], " h[elp]\n" ~
-		"  Print this message\n"
-		);
+	writeln("Atari XL/XE Disk Image Utility\nUsage:");
+	if (args.length > 2 && args[1] == "help")
+	{
+		switch (args[2]) {
+		case "i":
+		case "info":
+			write(args[0], " i|info\n" ~
+				"  Show basic image information.\n");
+			return;
+		case "l":
+		case "ls":
+		case "list":
+		case "dir":
+			write(args[0], " l|ls|list|dir [options] disk_image_file [path]\n" ~
+				"  List files in given directory (default is root)\n" ~
+				"Available options:\n" ~
+				" -v|--verbose               use long output format\n");
+			return;
+		case "n":
+		case "create":
+			write(args[0], " n|create [options] disk_image_file\n" ~
+				"  Create empty disk image.\n" ~
+				"Available options:\n" ~
+				" -F|--filesystem=fs         initialize with specified filesystem\n" ~
+				" -b|--bytes-per-sector=bps  set number of bytes per sector for created\n" ~
+				"                            image; default is 256\n" ~
+				" -s|--total-sectors=sec     set total number of sectors for created image;\n" ~
+				"                            default is 720\n");
+			return;
+		case "a":
+		case "add":
+			write(args[0], " a|add [options] disk_image_file files...\n" ~
+				"  Copy files and/or directories to disk image.\n" ~
+				"Available options:\n" ~
+				" -v|--verbose        list names of copied files\n" ~
+				" -D|--dest-dir=dest  specify destination directory within image\n");
+			return;
+		case "x":
+		case "extract":
+			write(args[0], " x|extract [options] disk_image_file files...\n" ~
+				"  Extract file[s] and/or directories from disk image.\n" ~
+				"Available options:\n" ~
+				" -v|--verbose               list names of extracted files\n" ~
+				" -c|--lowercase             change case of all names to lowercase\n" ~
+				" -g|--ignore-read-errors    continue after trying to read a corrupted file\n" ~
+				" -D|--dest-dir=dest         specify destination directory, default is\n" ~
+				"                            current working directory\n");
+			return;
+		case "boot":
+			write(args[0], " boot [options] disk_image_file\n" ~
+				"  Write DOS files to disk image.\n" ~
+				"Available options:\n" ~
+				" -d|--dos-version=version   specify DOS version, e.g. \"mydos450t\"\n");
+			return;
+		case "help":
+			write(args[0], " help [command]\n" ~
+				"  Print list of available commands or usage information for\n" ~
+				"a specified command\n");
+			return;
+		default:
+		}
+	}
+	write(args[0], " command [options] [disk_image_file] [files...]\n" ~
+		"\nAvailable commands:\n\n" ~
+		" i|info          Show basic image information.\n" ~
+		" l|ls|list|dir   List files in the disk image\n" ~
+		" n|create        Create an empty disk image.\n" ~
+		" x|extract       Extract file[s] and/or directories from disk image.\n" ~
+		" a|add           Copy file[s] and/or directories to disk image.\n" ~
+		" boot            Write DOS files to disk image.\n" ~
+		" help            Print usage information message\n" ~
+		"\nType\n",
+		args[0], " help [command] to show usage information for a specific command\n");
 }
 
 int main(string[] args)
@@ -347,22 +386,27 @@ int main(string[] args)
 	{
 		if (args.length > 1)
 		{
-			auto funcs = [
-				"help":&printHelp,
+			immutable funcs = [
+				"a":&add,
+				"add":&add,
+				"x":&extract,
+				"extract":&extract,
+				"i":&info,
 				"info":&info,
 				"dump":&dump,
+				"l":&list,
 				"ls":&list,
 				"list":&list,
+				"dir":&list,
 				"new":&create,
 				"boot":&boot,
-				"extract":&extract,
-				"add":&add,
+				"help":&printHelp,
+				"-h":&printHelp,
+				"--help":&printHelp
 				];
-			foreach (cmd, fun; funcs)
-			{
-				if (cmd.startsWith(args[1]))
-					return fun(args), 0;
-			}
+			auto fun = funcs.get(args[1], null);
+			if (fun !is null)
+				return fun(args), 0;
 		}
 		printHelp(args);
 		return 1;
