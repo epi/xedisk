@@ -21,6 +21,8 @@
 import std.string;
 import std.exception;
 import std.stream;
+import std.datetime;
+import std.typecons;
 
 import image;
 import filename;
@@ -172,6 +174,8 @@ interface DirEntry
 	@property void readOnly(bool ro);
 
 	@property bool isDir();
+
+	@property Nullable!SysTime time();
 
 	// /// Parent directory.
 	// DirEntry parent();

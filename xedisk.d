@@ -78,11 +78,12 @@ void list(string[] args)
 		writeln("Label:      ", fs.label, "\n");
 		fs.listDir((DirEntry dirEntry)
 		{
-			writefln("%s%s %-12s %8d",
+			writefln("%s%s %-12s %8d %s",
 				dirEntry.isDir ? ":" : " ",
 				dirEntry.readOnly ? "*" : " ",
 				dirEntry.name.fn,
-				dirEntry.size);
+				dirEntry.size,
+				dirEntry.time.isNull ? "" : dirEntry.time.get.toString());
 			++files;
 			return true;
 		}, args.length > 3 ? args[3] : "/");
@@ -398,7 +399,8 @@ int main(string[] args)
 				"ls":&list,
 				"list":&list,
 				"dir":&list,
-				"new":&create,
+				"n":&create,
+				"create":&create,
 				"boot":&boot,
 				"help":&printHelp,
 				"-h":&printHelp,

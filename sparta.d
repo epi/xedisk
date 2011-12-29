@@ -26,6 +26,7 @@ import std.conv;
 import std.stdio;
 import std.random;
 import std.datetime;
+import std.typecons;
 
 import image;
 import filesystem;
@@ -63,7 +64,7 @@ body
 	] ~ name.expand() ~ [
 		cast(ubyte) ctime.day,
 		cast(ubyte) ctime.month,
-		cast(ubyte) ctime.year,
+		cast(ubyte) (ctime.year % 100), // TODO: how sparta really interprets year?
 		cast(ubyte) ctime.hour,
 		cast(ubyte) ctime.minute,
 		cast(ubyte) ctime.second
@@ -417,6 +418,11 @@ class SpartaDirEntry : DirEntry
 		writeRawEntry();
 	}
 
+	override @property Nullable!SysTime time()
+	{
+		return Nullable!SysTime(time_);
+	}
+
 	override SpartaFileStream openFile(bool readable, bool writeable, bool append)
 	{
 		enforce(!isDir, this.name.fn ~ " is a directory");
@@ -474,7 +480,8 @@ private:
 		firstMapSector_ = rawEntry[1] | (rawEntry[2] << 8);
 		size_ = rawEntry[3] | (rawEntry[4] << 8) | (rawEntry[5] << 16);
 		name_ = FileName(rawEntry[6 .. 17]);
-		collectException(time_ = SysTime(DateTime(1900 + rawEntry[19], rawEntry[18], rawEntry[17], rawEntry[20], rawEntry[21], rawEntry[22])));
+		// TODO: how sparta really interprets year?
+		collectException(time_ = SysTime(DateTime((rawEntry[19] < 70 ? 2000 : 1900) + rawEntry[19], rawEntry[18], rawEntry[17], rawEntry[20], rawEntry[21], rawEntry[22])));
 		debug (SpartaRawEntry) .writeln("readrawentry ", rawEntry, ", ", stat_, ", ", firstMapSector_, ", ", size_, ", ", name_, ", ", time_);
 	}
 

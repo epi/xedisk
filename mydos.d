@@ -24,6 +24,8 @@ import std.stream;
 import std.range;
 import std.conv;
 import std.stdio;
+import std.datetime;
+import std.typecons;
 
 import image;
 import filesystem;
@@ -57,7 +59,7 @@ class MydosFileSystem : FileSystem
 {
 	@property string name()
 	{
-		return "MyDos";
+		return "MyDOS";
 	}
 	
 	@property BufferedImage image()
@@ -78,7 +80,7 @@ class MydosFileSystem : FileSystem
 
 	override @property void label(string label)
 	{
-		throw new FileSystemException("MyDos filesystem does not support setting volume label");
+		throw new FileSystemException("MyDOS filesystem does not support setting volume label");
 	}
 
 	override @property DirRange rootDir()
@@ -89,7 +91,7 @@ class MydosFileSystem : FileSystem
 	override void initialize()
 	{
 		enforce(image_.totalSectors >= 369 && image_.totalSectors <= 65535,
-			"Disk image has to have at least 369 and no more than 65535 sectors to set up MyDos filesystem on it, not " ~ to!string(image_.totalSectors));
+			"Disk image has to have at least 369 and no more than 65535 sectors to set up MyDOS filesystem on it, not " ~ to!string(image_.totalSectors));
 		auto bootSector = new ubyte[128];
 		bootSector[0] = 'M';
 		image_[1] = bootSector;
@@ -110,8 +112,7 @@ class MydosFileSystem : FileSystem
 
 	override void writeDosFiles(string ver)
 	{
-		auto lver = toLower(ver);
-		switch (lver)
+		switch (toLower(ver))
 		{
 		case "mydos450":
 		case "mydos450t":
@@ -340,10 +341,10 @@ class MydosDirEntry : DirEntry
 		stat_ = ro ? (stat | EntryStatus.READONLY) : (stat & ~EntryStatus.READONLY);
 	}
 
-/*	override DirEntry parent()
+	override @property Nullable!SysTime time()
 	{
-		return parent_;
-	}*/
+		return Nullable!SysTime();
+	}
 
 	override MydosFileStream openFile(bool readable, bool writeable, bool append)
 	{
