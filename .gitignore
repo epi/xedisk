@@ -1,0 +1,7 @@
+*.lst
+*.o
+doc/
+ddoc/*.html
+xedisk
+xedisk.exe
+unittest
