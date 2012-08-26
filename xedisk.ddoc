@@ -1,0 +1,36 @@
+DDOC =	<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+	<html><head>
+	<META http-equiv="content-type" content="text/html; charset=utf-8">
+	<title>xedisk library documentation - module $(TITLE)</title>
+	<link rel="stylesheet" type="text/css" href="style.css">
+	</head>
+	<body>
+		<div id="container" style="width:100%; margin:auto;">
+
+			<div id="header">
+				<h1>xedisk library documentation</h1>
+			</div>
+
+			<div id="menu">
+				<h3>Modules</h3>
+				<p><a href="disk.html">xe.disk</a></p>
+				<p><a href="fs.html">xe.fs</a></p>
+				<p><a href="streams.html">xe.streams</a></p>
+			</div>
+			<div id="content">
+				<h2>module $(TITLE)</h2>
+				$(BODY)
+			</div>
+
+			<div id="footer">
+				Copyright © 2010-2012 Adrian Matoga |
+				<a href="http://epi.github.com/xedisk">Project site</a> |
+				Page generated with <a href="http://dlang.org/ddoc.html">DDoc</a>
+				on $(DATETIME)
+			</div>
+
+		</div>
+	</body></html>
+
+DDOC_PSYMBOL = <span class="ddoc_psymbol">$0</span>
+D_PSYMBOL = $(B $0)
