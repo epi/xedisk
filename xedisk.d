@@ -608,8 +608,8 @@ void dump(string[] args)
 	{
 		foreach (sector; parseSectorRange(arg, disk.getSectors()))
 		{
-			disk.readSector(sector, buf);
-			outfile.rawWrite(buf);
+			auto n = disk.readSector(sector, buf);
+			outfile.rawWrite(buf[0 .. n]);
 		}
 	}
 }

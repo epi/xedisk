@@ -9,7 +9,7 @@ import xe.streams;
 class XfdDisk : XeDisk
 {
 	override uint getSectors() { return _totalSectors; }
-	override uint getSectorSize() { return _bytesPerSector; }
+	override uint getSectorSize(uint) { return 128; }
 	override bool isWriteProtected() { return false; }
 
 	override void setWriteProtected(bool value)
@@ -28,31 +28,27 @@ class XfdDisk : XeDisk
 protected:
 	override size_t doReadSector(uint sector, ubyte[] buffer)
 	{
-		auto len = min(buffer.length, 3 ? _bytesPerSector : 128);
+		auto len = min(buffer.length, 128);
 		return _stream.read(streamPosition(sector), buffer[0 .. len]);
 	}
 
 	override void doWriteSector(uint sector, in ubyte[] buffer)
 	{
-		auto len = min(buffer.length, sector > 3 ? _bytesPerSector : 128);
+		auto len = min(buffer.length, 128);
 		_stream.write(streamPosition(sector), buffer[0 .. len]);
 	}
 
 private:
-	this(RandomAccessStream s, uint totalSectors, uint bytesPerSector, XeDiskOpenMode mode)
+	this(RandomAccessStream s, uint totalSectors, XeDiskOpenMode mode)
 	{
 		_stream = s;
 		_totalSectors = totalSectors;
-		_bytesPerSector = bytesPerSector;
 		_openMode = mode;
 	}
 
 	size_t streamPosition(uint sector)
 	{
-		if (sector > 3)
-			return 3 * 128 + (sector - 4UL) * _bytesPerSector;
-		else
-			return (sector - 1) * 128;
+		return (sector - 1) * 128;
 	}
 
 	// XFD is just a blob of raw data from the first byte of first sector of disk.
@@ -67,11 +63,11 @@ private:
 		switch (len)
 		{
 		case 128 * 720:
-			return new XfdDisk(s, 720, 128, mode);
+			return new XfdDisk(s, 720, mode);
 		case 128 * 1040:
-			return new XfdDisk(s, 1040, 128, mode);
+			return new XfdDisk(s, 1040, mode);
 		default:
-			return new XfdDisk(s, (cast(uint) len + 127) / 128, 128, XeDiskOpenMode.ReadOnly);
+			return new XfdDisk(s, (cast(uint) len + 127) / 128, XeDiskOpenMode.ReadOnly);
 		}
 	}
 
@@ -84,14 +80,13 @@ private:
 		{
 			size_t size = totalSectors * bytesPerSector;
 			s.write(size - 1, [cast(ubyte) 0]);
-			return new XfdDisk(s, totalSectors, bytesPerSector, XeDiskOpenMode.ReadWrite);
+			return new XfdDisk(s, totalSectors, XeDiskOpenMode.ReadWrite);
 		}
 		else
 			throw new Exception("Sorry, xedisk only supports single and medium density for XFD. This limitation is permanent and intentional.");
 	}
 
 	RandomAccessStream _stream;
-	uint _bytesPerSector;
 	uint _totalSectors;
 }
 
@@ -104,7 +99,8 @@ unittest
 	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
 	auto buf = new ubyte[257];
 	assert (disk.getSectors() == 720);
-	assert (disk.getSectorSize() == 128);
+	assert (disk.getSectorSize(1) == 128);
+	assert (disk.getSectorSize(720) == 128);
 	assertThrown(disk.readSector(0, buf));
 	assertThrown(disk.readSector(721, buf));
 	assertThrown(disk.writeSector(1, buf));
@@ -112,8 +108,8 @@ unittest
 	assert (disk.readSector(1, buf[0 .. 6]) == 6);
 	assert (disk.readSector(2, buf) == 128);
 	assert (disk.readSector(3, buf) == 128);
-	assert (disk.readSector(4, buf) == disk.getSectorSize());
-	assert (disk.readSector(720, buf) == disk.getSectorSize());
+	assert (disk.readSector(4, buf) == disk.getSectorSize(4));
+	assert (disk.readSector(720, buf) == disk.getSectorSize(720));
 	writeln("XfdDisk (1) ok");
 }
 

@@ -90,7 +90,7 @@ class XeDisk
 			new XeException(format("Sector number out of bounds (%s/%s)", sector, this.getSectors()), 139));
 		auto result = doReadSector(sector, buffer);
 		debug (SectorOp) writefln("sector %05d  read from disk   length %d", sector, result);
-		enforce(result == min(buffer.length, sector > 3 ? this.getSectorSize() : 128), format("EOF while reading sector #%s", sector));
+		enforce(result == min(buffer.length, this.getSectorSize(sector)), format("EOF while reading sector #%s", sector));
 		return result;
 	}
 
@@ -133,7 +133,7 @@ class XeDisk
 	///
 	abstract uint getSectors();
 	///
-	abstract uint getSectorSize();
+	abstract uint getSectorSize(uint sector = 0);
 	///
 	abstract bool isWriteProtected();
 	///

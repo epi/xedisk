@@ -191,7 +191,7 @@ private:
 				insert(sector);
 			else
 				replaceLru(sector);
-			_mru._data.length = sector < 4 ? 128 : _disk.getSectorSize();
+			_mru._data.length = _disk.getSectorSize(sector);
 			if (readFromDisk)
 				_disk.readSector(sector, _mru._data);
 		}
