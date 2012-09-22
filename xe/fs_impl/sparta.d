@@ -497,7 +497,33 @@ class SpartaFile : XeFile
 	}
 
 	override OutputStream openWriteOnly(bool append) { throw new Exception("Not implemented"); }
-	override InputStream openReadOnly() { throw new Exception("Not implemented"); }
+
+	override InputStream openReadOnly()
+	{
+		return new class() InputStream
+		{
+			this()
+			{
+				_rawStream = RawStream(ClusterMapIterator(
+					this.outer._parent._fs._cache,
+					this.outer._entryInParent.firstMapCluster), 0);
+				_length = this.outer._entryInParent.size;
+			}
+
+			override size_t doRead(ubyte[] buffer)
+			{
+				size_t toRead = min(buffer.length, _length - _offset);
+				size_t r = _rawStream.read(buffer[0 .. toRead]);
+				assert (r == toRead);
+				_offset += r;
+				return r;
+			}
+
+			RawStream _rawStream;
+			uint _length;
+			uint _offset;
+		};
+	}
 }
 
 class SpartaSubDirectory : SpartaDirectory
