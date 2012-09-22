@@ -373,15 +373,12 @@ unittest
 	auto rs = RawStream(ClusterMapIterator(cache, info.getRootDirMapFirstCluster()), 0);
 	auto de = DirEntry(rs);
 	assert (de.status != DirEntryStatus.None);
-	writeln(de);
 	assert (de.name == "main");
 	assert (rs.read(new ubyte[DirEntrySize]) == DirEntrySize);
 	de = DirEntry(rs);
-	writeln(de);
 	assert (de.name == "foo");
 	assert (rs.read(new ubyte[DirEntrySize]) == DirEntrySize);
 	de = DirEntry(rs);
-	writeln(de);
 	assert (de.name == "sd32g.arc");
 	assert (rs.read(new ubyte[DirEntrySize]) == DirEntrySize);
 	de = DirEntry(rs);
@@ -447,14 +444,14 @@ mixin template DirectoryEntry()
 			if (de.status == DirEntryStatus.None)
 				break;
 			int result;
-			auto status = de.status & (DirEntryStatus.Directory | DirEntryStatus.Deleted);
-			if (status & DirEntryStatus.Deleted)
-				continue;
-			assert (_fs);
-			if (status == DirEntryStatus.Directory)
+			auto status = de.status & (DirEntryStatus.Directory
+				| DirEntryStatus.Deleted | DirEntryStatus.InUse);
+			if (status == (DirEntryStatus.Directory | DirEntryStatus.InUse))
 				result = action(new SpartaSubDirectory(this, de));
-			else
+			else if (status == DirEntryStatus.InUse)
 				result = action(new SpartaFile(this, de));
+			else
+				continue;
 			if (result)
 				return 1;
 		}
