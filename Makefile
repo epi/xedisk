@@ -14,7 +14,7 @@ DFLAGS = -debug -wi -g
 DFLAGS_TEST = -debug  -unittest -g -wi -cov
 DFLAGS_DDOC = -o- -Ddddoc
 
-ASCIIDOC = asciidoc -o $@ -a doctime
+MARKDOWN = markdown
 ZIP = 7z a -mx=9 -tzip $@
 RM = rm -f
 
@@ -53,8 +53,8 @@ windist: xedisk-$(VERSION)-windows.zip
 $(XEDISK_EXE): $(src_xedisk)
 	$(DMD) $(DFLAGS) -Jdos -of$@ $^
 
-xedisk.html: README.asciidoc
-	$(ASCIIDOC) $<
+xedisk.html: README.md
+	$(MARKDOWN) $< >$@
 
 doc: $(src_ddoc) xedisk.html
 	$(DMD) $(DFLAGS_DDOC) $(src_ddoc)
