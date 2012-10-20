@@ -595,6 +595,11 @@ class SpartaFileSystem : XeFileSystem
 		}
 	}
 
+	override void writeDosFiles(string dosVersion)
+	{
+		throw new Exception("Not implemented");
+	}
+
 	static this()
 	{
 		registerType("SPARTA", &tryOpen, &doCreate);

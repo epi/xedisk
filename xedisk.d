@@ -614,6 +614,23 @@ void dump(string[] args)
 	}
 }
 
+void writeDos(string[] args)
+{
+	string dosVersion;
+
+	getopt(args,
+		config.caseSensitive,
+		"D|dos-version", &dosVersion);
+
+	enforce(args.length >= 3, format(
+		"Missing arguments. Try `%s help write-dos'.", args[0]));
+	scope stream = new FileStream(File(args[2], "r+b"));
+	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadWrite);
+	scope fs = XeFileSystem.open(disk);
+
+	fs.writeDosFiles(dosVersion);
+}
+
 void printHelp(string[] args)
 {
 	writeln("no help yet");
@@ -637,6 +654,7 @@ int xedisk_main(string[] args)
 			"extract":&extract,
 			"x":&extract,
 			"dump":&dump,
+			"write-dos":&writeDos,
 			"help":&printHelp,
 			"-h":&printHelp,
 			"--help":&printHelp

@@ -670,7 +670,8 @@ private final class MydosFile : XeFile
 				{
 					buf = (_sectorOffset > 0) ? _fs._cache.request(_sector) : _fs._cache.alloc(_sector);
 					uint toWrite = min(buffer.length - written, dbps - _sectorOffset);
-					buf[_sectorOffset .. _sectorOffset + toWrite] = buffer[0 .. toWrite];
+					buf[_sectorOffset .. _sectorOffset + toWrite] =
+						buffer[written .. written + toWrite];
 					written += toWrite;
 					_sectorOffset += toWrite;
 				}
@@ -891,6 +892,40 @@ class MydosFileSystem : XeFileSystem
 		writeln("MydosFileSystem.adjustName (1) ok");
 	}
 
+	override void writeDosFiles(string dosVersion)
+	{
+		switch (dosVersion.toLower)
+		{
+		case "mydos450":
+		case "mydos450t":
+		case "450":
+		case "450t":
+			auto rootDir = getRootDirectory();
+			{
+			scope f = rootDir.createFile("DOS.SYS");
+			f.write(_dosSys450t[384 .. $]);
+			}
+			{
+			scope f = rootDir.createFile("DUP.SYS");
+			f.write(_dupSys450t);
+			}
+			auto firstSector =
+				(cast(MydosFile) rootDir.find("DOS.SYS"))._entry.firstSector;
+			auto init = _dosSys450t[0 .. 384].dup;
+			init[14] = _cache.getSectorSize() == 256 ? 2 : 1;
+			init[15] = getByte!0(firstSector);
+			init[16] = getByte!1(firstSector);
+			init[17] = cast(ubyte) (_cache.getSectorSize() - 3);
+			_cache.alloc(1)[] = init[0 .. 128];
+			_cache.alloc(2)[] = init[128 .. 256];
+			_cache.alloc(3)[] = init[256 .. 384];
+			break;
+		default:
+			throw new Exception(
+				"Invalid or unsupported MyDOS version specified");
+		}
+	}
+
 	static this()
 	{
 		registerType("MYDOS", &tryOpen, &doCreate);
@@ -986,6 +1021,11 @@ class MydosFileSystem : XeFileSystem
 	private SectorCache _cache;
 	private bool _longLinks;
 	private Vtoc _vtoc;
+
+	private static _dosSys450t =
+		cast(immutable(ubyte[])) import("mydos450t_dos.sys");
+	private static _dupSys450t =
+		cast(immutable(ubyte[])) import("mydos450t_dup.sys");
 }
 
 unittest
@@ -1033,6 +1073,26 @@ unittest
 		assert (vtocSizeFromVtocMark(fs._cache.request(360)[0], 128) == 32);
 	}
 	writeln("MydosFileSystem (2) ok");
+}
+
+unittest
+{
+	scope stream = new MemoryStream(new ubyte[0]);
+	scope disk = XeDisk.create(stream, "ATR", 720, 256);
+	scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "mydos");
+	{
+	scope fstream = fs.getRootDirectory().createFile("DUP.SYS");
+	fstream.write(MydosFileSystem._dupSys450t);
+	}
+	{
+	auto buf = new ubyte[MydosFileSystem._dupSys450t.length + 1];
+	scope fstream = (cast(MydosFile) fs.getRootDirectory().find("DUP.SYS")).
+		openReadOnly();
+	auto r = fstream.read(buf);
+	assert (r == MydosFileSystem._dupSys450t.length);
+	assert (buf[0 .. r] == MydosFileSystem._dupSys450t);
+	}
+	writeln ("MydosFile read/write ok");
 }
 
 int vtocSizeFromGeometry(int totalSectors, int bytesPerSector)

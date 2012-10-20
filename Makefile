@@ -9,8 +9,8 @@ src_xedisk  := $(src_lib) streamimpl.d xedisk.d
 src_all     := $(subst ./,,$(shell find . -name "*.d"))
 
 DMD = dmd
-#DFLAGS = -debug -wi -g
-DFLAGS = -O -release -inline -w
+DFLAGS = -debug -wi -g
+#DFLAGS = -O -release -inline -w
 DFLAGS_TEST = -debug  -unittest -g -wi -cov
 DFLAGS_DDOC = -o- -Ddddoc
 
@@ -42,7 +42,7 @@ test: unittest$(EXESUFFIX)
 .PHONY: test
 
 unittest: $(src_libtest)
-	$(DMD) $(DFLAGS_TEST) -of$@ $^
+	$(DMD) $(DFLAGS_TEST) -Jdos -of$@ $^
 
 wc:
 	@wc $(wildcard $(sort $(src_xedisk) $(src_libtest)))
@@ -51,7 +51,7 @@ wc:
 windist: xedisk-$(VERSION)-windows.zip
 
 $(XEDISK_EXE): $(src_xedisk)
-	$(DMD) $(DFLAGS) -of$@ $^
+	$(DMD) $(DFLAGS) -Jdos -of$@ $^
 
 xedisk.html: README.asciidoc
 	$(ASCIIDOC) $<

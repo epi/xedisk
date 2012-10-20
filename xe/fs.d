@@ -369,6 +369,8 @@ class XeFileSystem
 	///
 	abstract string adjustName(string name);
 
+	abstract void writeDosFiles(string dosVersion);
+
 	/// Enumerate (non-recursively) contents of a directory specified by path
 	/// filtered according to mask.
 	/// Returns: range that can be iterated over using foreach.
