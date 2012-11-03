@@ -31,6 +31,12 @@ import xe.streams;
 
 private:
 
+version (unittest)
+{
+	import std.stdio;
+	import streamimpl;
+}
+
 class IdeaPartitionAsDisk : XeDisk
 {
 	override uint getSectors() { return _numSectors; }
@@ -273,4 +279,23 @@ private:
 	RandomAccessStream _stream;
 	RawStruct!PartitionTableData _data;
 	IdeaPartition[16] _partitions;
+}
+
+unittest
+{
+	scope stream = new FileStream(File("testfiles/sdc.mbr", "rb"));
+	scope pt = IdeaPartitionTable.tryOpen(stream, XeDiskOpenMode.ReadOnly);
+	assert(pt);
+	assert(walkLength(pt[]) == 6);
+	auto r = pt[];
+	auto part = cast(IdeaPartition) r.front;
+	assert(part._pi.begin == 0);
+	assert(part._pi.len == 65535);
+	assert(part._pi.clsize == PartitionSectorSize.B256);
+	r.popFront();
+	part = cast(IdeaPartition) r.front;
+	assert(part._pi.begin == 32768);
+	assert(part._pi.len == 65535);
+	assert(part._pi.clsize == PartitionSectorSize.B512);
+	writeln("IdeaPartitionTable (1) ok");
 }
