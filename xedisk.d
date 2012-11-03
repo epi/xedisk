@@ -278,7 +278,12 @@ void info(string[] args)
 		: openPartitionTable(args[2], OpenMode.ReadOnly);
 
 	if (sh.table && !sh.disk)
+	{
 		writeln("Partition table type: ", sh.table.getType());
+		writeln("Number of partitions: ", walkLength(sh.table[]));
+		return;
+	}
+
 	if (!sh.table && !sh.disk)
 		sh.disk = XeDisk.open(sh.stream, XeDiskOpenMode.ReadOnly);
 
