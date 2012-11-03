@@ -31,6 +31,7 @@ import std.path;
 import xe.disk;
 import xe.fs;
 import xe.exception;
+import xe.streams;
 import streamimpl;
 
 auto parseSectorRange(in char[] s, int max)
@@ -121,6 +122,93 @@ version (unittest)
 	}
 }
 
+struct ScopedHandles
+{
+	~this()
+	{
+		if (fs) { clear(fs); fs = null; }
+		if (disk) { clear(disk); disk = null; }
+		if (table) { clear(table); table = null; }
+		if (stream) { clear(stream); stream = null; }
+		file.close();
+	}
+
+	XeFileSystem fs;
+	XeDisk disk;
+	XePartitionTable table;
+	RandomAccessStream stream;
+	File file;
+}
+
+enum OpenMode
+{
+	ReadOnly = 0,
+	ReadWrite = 1,
+	Create = 2
+}
+immutable cOpenModes = [ "rb", "r+b", "w+b" ]; // must match OpenMode!
+
+ScopedHandles openFileStream(string fileName, OpenMode mode)
+{
+	ScopedHandles sh;
+	switch (mode)
+	{
+	case OpenMode.ReadOnly, OpenMode.ReadWrite, OpenMode.Create:
+		sh.file = File(fileName, cOpenModes[mode]); break;
+	default:
+		assert(false);
+	}
+	sh.stream = new FileStream(sh.file);
+	return sh;
+}
+
+ScopedHandles openDisk(string fileName, OpenMode mode)
+{
+	assert(mode != OpenMode.Create);
+	auto sh = openFileStream(fileName, mode);
+	sh.disk = XeDisk.open(sh.stream, mode == OpenMode.ReadOnly
+		? XeDiskOpenMode.ReadOnly : XeDiskOpenMode.ReadWrite);
+	return sh;
+}
+
+ScopedHandles createDisk(string fileName, string diskType, uint sectors, uint sectorSize)
+{
+	auto sh = openFileStream(fileName, OpenMode.Create);
+	sh.disk = XeDisk.create(sh.stream, diskType, sectors, sectorSize);
+	return sh;
+}
+
+ScopedHandles openPartitionTable(string fileName, OpenMode mode)
+{
+	assert(mode != OpenMode.Create);
+	auto sh = openFileStream(fileName, mode);
+	sh.table = XePartitionTable.open(sh.stream, mode == OpenMode.ReadOnly
+			? XeDiskOpenMode.ReadOnly : XeDiskOpenMode.ReadWrite);
+	return sh;
+}
+
+ScopedHandles openPartition(string fileName, uint part, OpenMode mode)
+{
+	auto sh = openPartitionTable(fileName, mode);
+	if (sh.table)
+	{
+		uint p = 1;
+		auto r = sh.table[];
+		while (p < part && !r.empty) { ++p; r.popFront(); }
+		if (p == part && !r.empty)
+			sh.disk = r.front.getAsDisk();
+		else
+			throw new Exception("Must specify a valid partition number");
+	}
+	else
+	{
+		enforce(!part, "Disk image does not contain a valid partition table");
+		sh.disk = XeDisk.open(sh.stream, mode == OpenMode.ReadOnly
+			? XeDiskOpenMode.ReadOnly : XeDiskOpenMode.ReadWrite);
+	}
+	return sh;
+}
+
 // xedisk create [-b bps] [-s nsec] [-d dtype] [-f fstype] image
 void create(string[] args)
 {
@@ -137,10 +225,9 @@ void create(string[] args)
 		"f|fs-type", &fsType);
 
 	enforce(args.length >= 3, "Missing image file name");
-	scope stream = new FileStream(File(args[2], "w+b"));
-	scope disk = XeDisk.create(stream, diskType, sectors, sectorSize);
+	auto sh = createDisk(args[2], diskType, sectors, sectorSize);
 	if (fsType.length)
-		XeFileSystem.create(disk, fsType);
+		sh.fs = XeFileSystem.create(sh.disk, fsType);
 }
 
 unittest
@@ -159,23 +246,54 @@ unittest
 	writeln("create (1) ok");
 }
 
+// xedisk mkfs [-p partition] -f fstype image
+void mkfs(string[] args)
+{
+	uint partition;
+	string fsType;
+
+	getopt(args,
+		config.caseSensitive,
+		"p|partition", &partition,
+		"f|fs-type", &fsType);
+
+	enforce(args.length >= 3, "Missing image file name");
+	enforce(fsType.length, "File system type not specified");
+	auto sh = openPartition(args[2], partition, OpenMode.ReadWrite);
+	sh.fs = XeFileSystem.create(sh.disk, fsType);
+}
+
 // xedisk info image ...
 void info(string[] args)
 {
+	uint partition;
+
+	getopt(args,
+		config.caseSensitive,
+		"p|partition", &partition);
+
 	enforce(args.length >= 3, "Missing image file name.");
-	scope stream = new FileStream(File(args[2]));
-	scope disk = XeDisk.open(stream);
+	auto sh = partition
+		? openPartition(args[2], partition, OpenMode.ReadOnly)
+		: openPartitionTable(args[2], OpenMode.ReadOnly);
 
-	writeln("Disk type:         ", disk.getType());
-	writeln("Total sectors:     ", disk.getSectors());
-	writeln("Bytes per sectors: ", disk.getSectorSize());
+	if (sh.table && !sh.disk)
+		writeln("Partition table type: ", sh.table.getType());
+	if (!sh.table && !sh.disk)
+		sh.disk = XeDisk.open(sh.stream, XeDiskOpenMode.ReadOnly);
 
-	scope fs = XeFileSystem.open(disk);
+	if (sh.disk)
+	{
+		writeln("Disk type:            ", sh.disk.getType());
+		writeln("Total sectors:        ", sh.disk.getSectors());
+		writeln("Bytes per sectors:    ", sh.disk.getSectorSize());
 
-	writeln("\nFile system type:  ", fs.getType());
-	writeln("Label:             ", fs.getLabel());
-	writeln("Free sectors:      ", fs.getFreeSectors());
-	writeln("Free bytes:        ", fs.getFreeBytes());
+		sh.fs = XeFileSystem.open(sh.disk);
+		writeln("\nFile system type:     ", sh.fs.getType());
+		writeln("Label:                ", sh.fs.getLabel());
+		writeln("Free sectors:         ", sh.fs.getFreeSectors());
+		writeln("Free bytes:           ", sh.fs.getFreeBytes());
+	}
 }
 
 unittest
@@ -200,9 +318,9 @@ unittest
 	assert (!res[2]);
 	res = captureConsole(info(["", "", disk]));
 	assert (res[0] ==
-		"Disk type:         ATR\n" ~
-		"Total sectors:     720\n" ~
-		"Bytes per sectors: 256\n");
+		"Disk type:            ATR\n" ~
+		"Total sectors:        720\n" ~
+		"Bytes per sectors:    256\n");
 	assert (res[1] == "");
 	assert (cast(XeException) res[2]);
 	assert ((cast(XeException) res[2]).errorCode == 148);
@@ -225,13 +343,13 @@ unittest
 	assert (!res[2]);
 	res = captureConsole(info(["", "", disk]));
 	assert (res[0] ==
-		"Disk type:         XFD\n" ~
-		"Total sectors:     1040\n" ~
-		"Bytes per sectors: 128\n\n" ~
-		"File system type:  MyDOS\n" ~
-		"Label:             \n" ~
-		"Free sectors:      " ~ to!string(1040 - 3 - 2 - 8) ~ "\n" ~
-		"Free bytes:        " ~ to!string((1040 - 3 - 2 - 8) * 125) ~ "\n");
+		"Disk type:            XFD\n" ~
+		"Total sectors:        1040\n" ~
+		"Bytes per sectors:    128\n\n" ~
+		"File system type:     MyDOS\n" ~
+		"Label:                \n" ~
+		"Free sectors:         " ~ to!string(1040 - 3 - 2 - 8) ~ "\n" ~
+		"Free bytes:           " ~ to!string((1040 - 3 - 2 - 8) * 125) ~ "\n");
 	assert (res[1] == "");
 	writeln("create & info (2) ok");
 }
@@ -241,24 +359,25 @@ void list(string[] args)
 {
 	bool longFormat;
 	bool sizeInSectors;
+	uint partition;
 
 	getopt(args,
 		config.caseSensitive,
 		config.bundling,
+		"p|partition", &partition,
 		"s|size", &sizeInSectors,
 		"l", &longFormat);
 
 	enforce(args.length >= 3, format("Missing image file name", args[0]));
 
-	scope stream = new FileStream(File(args[2]));
-	scope disk = XeDisk.open(stream);
-	scope fs = XeFileSystem.open(disk);
+	auto sh = openPartition(args[2], partition, OpenMode.ReadOnly);
+	sh.fs = XeFileSystem.open(sh.disk);
 
 	size_t nfiles;
 	size_t totalSize;
 	string path = args.length > 3 ? args[3] : "/";
 	string mask = args.length > 4 ? args[4] : "*";
-	foreach (entry; fs.listDirectory(path, mask))
+	foreach (entry; sh.fs.listDirectory(path, mask))
 	{
 		if (longFormat)
 		{
@@ -283,9 +402,9 @@ void list(string[] args)
 		writefln("%s files", nfiles);
 		writefln("%s %s", totalSize, sizeInSectors ? "sectors" : "bytes");
 		if (sizeInSectors)
-			writefln("%s free sectors", fs.getFreeSectors());
+			writefln("%s free sectors", sh.fs.getFreeSectors());
 		else
-			writefln("%s free bytes", fs.getFreeBytes());
+			writefln("%s free bytes", sh.fs.getFreeBytes());
 	}
 }
 
@@ -534,14 +653,15 @@ unittest
 void extract(string[] args)
 {
 	string destDir = ".";
-	bool recursive;
 	bool verbose;
+	uint partition;
 
 	getopt(args,
 		config.caseSensitive,
 		config.bundling,
 		"d|dest-dir", &destDir,
-		"v|verbose", &verbose);
+		"v|verbose", &verbose,
+		"p|partition", &partition);
 
 	enforce(args.length >= 3, format(
 		"Missing arguments. Try `%s help extract'.", args[0]));
@@ -553,9 +673,8 @@ void extract(string[] args)
 	else
 		enforce(isDir(destDir), format("`%s' is not a directory", destDir));
 
-	scope stream = new FileStream(File(args[2], "r"));
-	scope disk = XeDisk.open(stream);
-	scope fs = XeFileSystem.open(disk);
+	auto sh = openPartition(args[2], partition, OpenMode.ReadOnly);
+	sh.fs = XeFileSystem.open(sh.disk);
 
 	void copyFile(XeEntry entry, string destName)
 	{
@@ -576,7 +695,7 @@ void extract(string[] args)
 
 	foreach (name; args[3 .. $])
 	{
-		auto top = fs.getRootDirectory().find(name);
+		auto top = sh.fs.getRootDirectory().find(name);
 		auto destName = buildDestName(top);
 		if (top.isDirectory())
 		{
@@ -597,18 +716,23 @@ void extract(string[] args)
 // xedisk dump image [sector_range]
 void dump(string[] args)
 {
+	uint partition;
+
+	getopt(args,
+		config.caseSensitive,
+		"p|partition", &partition);
+
 	enforce(args.length >= 3, "Missing image file name");
 	auto outfile = stdout;
-	scope stream = new FileStream(File(args[2]));
-	scope disk = XeDisk.open(stream);
-	auto buf = new ubyte[disk.getSectorSize()];
+	auto sh = openPartition(args[2], partition, OpenMode.ReadOnly);
+	auto buf = new ubyte[sh.disk.getSectorSize()];
 	if (args.length == 3)
 		args ~= "-";
 	foreach (arg; args[3 .. $])
 	{
-		foreach (sector; parseSectorRange(arg, disk.getSectors()))
+		foreach (sector; parseSectorRange(arg, sh.disk.getSectors()))
 		{
-			auto n = disk.readSector(sector, buf);
+			auto n = sh.disk.readSector(sector, buf);
 			outfile.rawWrite(buf[0 .. n]);
 		}
 	}
@@ -631,6 +755,51 @@ void writeDos(string[] args)
 	fs.writeDosFiles(dosVersion);
 }
 
+void listPartitions(string[] args)
+{
+	auto sh = openPartitionTable(args[2], OpenMode.ReadOnly);
+	enforce(sh.table, "The image does not contain a valid partition table");
+	uint i;
+	writefln("%3s %11s  %s", "#", "sectors", "sector size");
+	writeln("-----------------------------");
+	foreach (partition; sh.table)
+	{
+		scope disk = partition.getAsDisk();
+		writefln("%3d. %10d %4d",
+			++i, disk.getSectors(), disk.getSectorSize());
+	}
+}
+
+void diskCopy(string[] args)
+{
+	uint inputPartition;
+	uint outputPartition;
+	string outputType;
+
+	getopt(args,
+		config.caseSensitive,
+		"p|input-partition", &inputPartition,
+		"P|output-partition", &outputPartition,
+		"t|output-type", &outputType);
+
+	enforce(args.length >= 4, format(
+		"Missing arguments. Try `%s help %s'.", args[0], args[1]));
+
+	auto src = openPartition(args[2], inputPartition, OpenMode.ReadOnly);
+	auto dest = exists(args[3])
+		? openPartition(args[3], outputPartition, OpenMode.ReadWrite)
+		: createDisk(args[3],
+			outputType.length ? outputType : src.disk.getType(),
+			src.disk.getSectors(), src.disk.getSectorSize());
+	enforce(src.disk.getSectors() == dest.disk.getSectors()
+		&& src.disk.getSectorSize() == dest.disk.getSectorSize(),
+		"Output disk geometry is different than the input disk geometry");
+	auto buf = new ubyte[src.disk.getSectorSize()];
+	foreach (sector; 1 .. src.disk.getSectors() + 1)
+		dest.disk.writeSector(sector,
+			buf[0 .. src.disk.readSector(sector, buf)]);
+}
+
 void printHelp(string[] args)
 {
 	writeln("no help yet");
@@ -643,6 +812,7 @@ int xedisk_main(string[] args)
 		immutable funcs = [
 			"create":&create,
 			"n":&create,
+			"mkfs":&mkfs,
 			"info":&info,
 			"i":&info,
 			"list":&list,
@@ -655,6 +825,9 @@ int xedisk_main(string[] args)
 			"x":&extract,
 			"dump":&dump,
 			"write-dos":&writeDos,
+			"list-partitions":&listPartitions,
+			"lp":&listPartitions,
+			"dc":&diskCopy,
 			"help":&printHelp,
 			"-h":&printHelp,
 			"--help":&printHelp
