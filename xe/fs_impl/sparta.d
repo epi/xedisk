@@ -437,7 +437,8 @@ mixin template DirectoryEntry()
 	{
 		auto rs = _entryInThis._rs.save();
 		ubyte[DirEntrySize] discard;
-		for (;;)
+		uint len = _entryInThis.size;
+		for (uint pos = 23; pos < len; pos += 23)
 		{
 			rs.read(discard);
 			auto de = DirEntry(rs);
