@@ -257,8 +257,8 @@ private:
 	static IdeaPartitionTable tryOpen(RandomAccessStream stream, XeDiskOpenMode mode)
 	{
 		auto result = new IdeaPartitionTable(stream);
-		enforce(stream.read(0, result._data.raw) == result._data.raw.length,
-			"EOF while reading MBR");
+		if (stream.read(0, result._data.raw) < result._data.raw.length)
+			return null;
 		if (result._data.magic == 0x728)
 			return result;
 		return null;
