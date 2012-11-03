@@ -21,10 +21,11 @@ along with xedisk.  If not, see <http://www.gnu.org/licenses/>.
 module xe.disk;
 
 debug import std.stdio;
-import std.exception;
 import std.algorithm;
-import std.typecons;
+import std.exception;
+import std.range;
 import std.string;
+import std.typecons;
 import xe.streams;
 import xe.exception;
 
@@ -312,4 +313,42 @@ unittest
 	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
 //	assertThrown(XeDisk.Open(stream, XeDiskOpenMode.ReadOnly));
 	writeln("XeDisk (4) ok");
+}
+
+class XePartition
+{
+	abstract XeDisk getAsDisk();
+}
+
+class XePartitionTable
+{
+	static XePartitionTable open(RandomAccessStream stream, XeDiskOpenMode mode)
+	{
+		foreach (t; _types)
+		{
+			auto pt = t.tryOpen(stream, mode);
+			if (pt)
+				return pt;
+		}
+		return null;
+	}
+
+	protected static void registerType(
+		string type,
+		XePartitionTable function(RandomAccessStream s, XeDiskOpenMode mode) tryOpen)
+	{
+		type = toUpper(type);
+		_types[type] = TypeDelegates(tryOpen);
+	}
+
+	abstract ForwardRange!XePartition opSlice();
+	abstract string getType();
+
+private:
+	struct TypeDelegates
+	{
+		XePartitionTable function(RandomAccessStream s, XeDiskOpenMode mode) tryOpen;
+	}
+
+	static Nullable!TypeDelegates[string] _types;
 }
