@@ -26,6 +26,14 @@ import std.typecons;
 import xe.disk;
 import xe.streams;
 
+version (unittest)
+{
+	import std.stdio;
+	import streamimpl;
+}
+
+private:
+
 class XfdDisk : XeDisk
 {
 	override uint getSectors() { return _totalSectors; }
@@ -71,12 +79,15 @@ private:
 		return (sector - 1) * 128;
 	}
 
-	// XFD is just a blob of raw data from the first byte of first sector of disk.
-	// There's no metadata at all, file length may not be even aligned to sector boundary, yet the file can still contain correct data.
-	// File name extension may be wrong - people give the .XFD extension to images in other formats, and conversely,
-	// other extensions to raw data that can be interpreted as XFD.
-	// The recognition method applied here first tries to match file length to a single or medium density disk.
-	// If this fails, it assumes 128-byte sectors with a non-standard number of sectors and opens the disk read-only to avoid data corruption.
+	// XFD is just a blob of raw data from the first byte of first sector of
+	// disk. There's no metadata at all, file length may not be even aligned to
+	// sector boundary, yet the file can still contain correct data.
+	// File name extension may be wrong - people give the .XFD extension to
+	// images in other formats, and conversely, other extensions to raw data
+	// that can be interpreted as XFD. The recognition method applied here
+	// first tries to match file length to a single or medium density disk.
+	// If this fails, it assumes 128-byte sectors with a non-standard number
+	// of sectors and opens the disk read-only to avoid data corruption.
 	static XfdDisk tryOpen(RandomAccessStream s, XeDiskOpenMode mode)
 	{
 		auto len = s.getLength();
@@ -87,13 +98,16 @@ private:
 		case 128 * 1040:
 			return new XfdDisk(s, 1040, mode);
 		default:
-			return new XfdDisk(s, (cast(uint) len + 127) / 128, XeDiskOpenMode.ReadOnly);
+			return new XfdDisk(s, (cast(uint) len + 127) / 128,
+				XeDiskOpenMode.ReadOnly);
 		}
 	}
 
-	// OTOH, the creation of XFD images will only be allowed for single and medium density.
-	// There's no true reason to use XFDs whatsoever, as any useful tool supports the ATR format, so that's not a big loss.
-	static XfdDisk doCreate(RandomAccessStream s, uint totalSectors, uint bytesPerSector)
+	// OTOH, the creation of XFD images will only be allowed for single and
+	// medium density. There's no valid reason to use XFDs whatsoever, as any
+	// useful tool supports the ATR format, so that's not a big loss.
+	static XfdDisk doCreate(RandomAccessStream s, uint totalSectors,
+		uint bytesPerSector)
 	{
 		auto par = tuple(totalSectors, bytesPerSector);
 		if (par == tuple(720, 128) || par == tuple(1040, 128))
@@ -103,7 +117,9 @@ private:
 			return new XfdDisk(s, totalSectors, XeDiskOpenMode.ReadWrite);
 		}
 		else
-			throw new Exception("Sorry, xedisk only supports single and medium density for XFD. This limitation is permanent and intentional.");
+			throw new Exception(
+				"Sorry, xedisk only supports single and medium density " ~
+				"for XFD. This limitation is permanent and intentional.");
 	}
 
 	RandomAccessStream _stream;
@@ -112,11 +128,9 @@ private:
 
 unittest
 {
-	import std.stdio;
-	import streamimpl;
-
 	scope stream = new FileStream(File("testfiles/DOS25.XFD"));
-	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
+	scope disk = cast(XfdDisk) XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
+	assert (disk);
 	auto buf = new ubyte[257];
 	assert (disk.getSectors() == 720);
 	assert (disk.getSectorSize(1) == 128);
@@ -135,9 +149,6 @@ unittest
 
 unittest
 {
-	import std.stdio;
-	import streamimpl;
-
 	enum Sectors = 720;
 	enum Size = Sectors * 128;
 
