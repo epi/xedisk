@@ -135,17 +135,29 @@ private:
 		}
 		uint size = ((totalSectors - singleDensitySectors) * bytesPerSector
 			+ singleDensitySectors * 128) / Paragraph;
-		ubyte[] header = [
-			0x96, 0x02,
-			getByte!0(size), getByte!1(size),
-			getByte!0(bytesPerSector), getByte!1(bytesPerSector),
-			getByte!2(size),
-			0, 0, 0, 0, 0, 0, 0, 0, 0 ];
-		assert(header.length == 16);
-		s.write(0, header);
+		s.write(0, makeHeader(totalSectors, bytesPerSector));
 		s.write(HeaderLength + size * Paragraph - 1, [cast(ubyte) 0]);
 		return new AtrDisk(s, totalSectors, singleDensitySectors,
 			bytesPerSector, false, XeDiskOpenMode.ReadWrite);
+	}
+
+	static auto makeHeader(uint sectors, uint sectorSize,
+		bool writeProtected = false)
+	out(result)
+	{
+		assert(result.length == 16);
+	}
+	body
+	{
+		uint size = HeaderLength + 3 * 128 + (sectors - 3) * sectorSize;
+		uint npar = (size - HeaderLength) / Paragraph;
+		assert((size - HeaderLength) % Paragraph == 0);
+
+		return cast(ubyte[]) [
+			0x96, 0x02, getByte!0(npar), getByte!1(npar),
+			getByte!0(sectorSize), getByte!1(sectorSize),
+			getByte!2(npar),
+			0, 0, 0, 0, 0, 0, 0, 0, writeProtected ? 1 : 0 ];
 	}
 
 	RandomAccessStream _stream;
@@ -156,6 +168,44 @@ private:
 
 	enum HeaderLength = 16;
 	enum Paragraph = 16;
+}
+
+unittest
+{
+	assert(AtrDisk.makeHeader(20720, 256, true) == cast(ubyte[]) [
+		0x96, 0x02, 0xe8, 0x0e, 0x00, 0x01, 0x05, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 ]);
+	writeln("AtrDisk.makeHeader (1) ok");
+}
+
+unittest
+{
+	enum Sectors = 720;
+	enum SectorSize = 192;
+	enum Size = 3 * 128 + (Sectors - 3) * SectorSize;
+	{
+		scope stream = new MemoryStream(AtrDisk.makeHeader(
+			Sectors, SectorSize) ~ new ubyte[Size]);
+		assert (!AtrDisk.tryOpen(stream, XeDiskOpenMode.ReadOnly));
+	}
+	writeln("AtrDisk.tryOpen (1) ok");
+}
+
+unittest
+{
+	{
+		scope stream = new MemoryStream(new ubyte[0]);
+		scope disk = AtrDisk.doCreate(stream, 65535, 512);
+		assert (stream.getLength() == 65535 * 512 + 16);
+		assert (disk.getSectors() == 65535);
+		assert (disk.getSectorSize() == 512);
+	}
+	{
+		scope stream = new MemoryStream(new ubyte[0]);
+		assertThrown(AtrDisk.doCreate(stream, 720, 129));
+		assert (stream.getLength() == 0);
+	}
+	writeln("AtrDisk.doCreate (1) ok");
 }
 
 unittest
@@ -195,15 +245,11 @@ unittest
 		assert (stream.array.length == Size);
 		auto buf = new ubyte[AtrDisk.HeaderLength];
 		assert (stream.read(0, buf) == AtrDisk.HeaderLength);
-		assert (buf[] == cast(ubyte[]) [
-			0x96, 0x02, getByte!0(NPar), getByte!1(NPar), 0, 1, getByte!2(NPar),
-			0, 0, 0, 0, 0, 0, 0, 0, 0 ]);
+		assert (buf[] == AtrDisk.makeHeader(Sectors, 256));
 		assert (!disk.isWriteProtected());
 		disk.setWriteProtected(true);
 		assert (stream.read(0, buf) == AtrDisk.HeaderLength);
-		assert (buf[] == cast(ubyte[]) [
-			0x96, 0x02, getByte!0(NPar), getByte!1(NPar), 0, 1, getByte!2(NPar),
-			0, 0, 0, 0, 0, 0, 0, 0, 1 ]);
+		assert (buf[] == AtrDisk.makeHeader(Sectors, 256, true));
 		assert (disk.isWriteProtected());
 	}
 	{
