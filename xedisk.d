@@ -370,8 +370,8 @@ void list(string[] args)
 		config.caseSensitive,
 		config.bundling,
 		"p|partition", &partition,
-		"s|size", &sizeInSectors,
-		"l", &longFormat);
+		"s|sectors", &sizeInSectors,
+		"l|long", &longFormat);
 
 	enforce(args.length >= 3, format("Missing image file name", args[0]));
 
