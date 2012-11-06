@@ -15,7 +15,8 @@ Supported disk image formats
 Currently supported disk image file formats include:
 
 * ATR (with 128, 256 and 512 bytes per sector and up to 65535 sectors);
-* XFD (single and medium density).
+* XFD (single and medium density);
+* KMK/JZ IDE (IDEa) partitions.
 
 Supported file systems
 ----------------------
@@ -23,7 +24,7 @@ Supported file systems
 Currently supported file systems include:
 
 * MyDOS (full support);
-* SpartaDOS (display file system information, list directory).
+* SpartaDOS (display file system information, list directory, extract files and directories).
 
 Installation
 ------------
@@ -45,28 +46,67 @@ If you like hacking, you can easily do without `make` or use a different D compi
 Usage
 -----
 
-A general syntax is:
+General syntax:
 
-	$ xedisk command [disk_image_file] [options] 
+<code>$ xedisk *command* [*disk_image_file*] [*options*]</code>
 
 You can place options wherever you wish in the command line, as well as bundle
 single-letter options together, if they do not require parameters.
 
-If the command does not require writing into image, file is opened as read-only,
-so you don't need write access rights to the file.
+If the command does not require writing into the image, the file is opened
+read-only, so you don't need permission to write to the file.
 
-Until a complete documentation is available, try the following command to see
-what may be implemented:
+### Displaying image information
 
-	$ xedisk help
+Syntax:
+
+<code>$ xedisk info|i *file* [*options*]</code>
+
+Options:
+
+<dl>
+<dt><code>-p|--partition <em>partition</em></code></dt>
+<dd>for images with a partition table, specify the partition to show the info for.</dd>
+</dl>
+
+Examples:
+
+	$ xedisk info MYDOS450.ATR
+	$ xedisk info /dev/sdc
+	$ xedisk info /dev/sdc -p 2
+
+### Listing directory
+
+Syntax:
+
+<code>$ xedisk l|ls|list|dir *file* [*path*] [*options*]</code>
+
+Options:
+
+<dl>
+<dt><code>-l|--long</code></dt>
+<dd>show additional information about files (size, time stamp, attributes).</dd>
+<dt><code>-s|--sectors</code></dt>
+<dd>show sizes in sectors, instead of bytes.</dd>
+<dt><code>-p|--partition <em>partition</em></code></dt>
+<dd>for images with a partition table, specify which partition to use.</dd>
+</dl>
+
+Examples:
+
+	$ xedisk ls stuff_ll2k2.atr
+	$ xedisk dir /dev/sdc -p 1 music/tmc -l
 
 Feedback
 --------
 
-Recommended way to deal with issues concerning `xedisk` is to clone the repo, fix the bug
-or implement the missing feature, and commit the changes with a meaningful commit message.
+Recommended way to deal with issues found in `xedisk` is to clone the
+github repository, fix the bug or implement the missing feature, commit the
+changes with a meaningful commit message, and send a pull request to the
+author.
 
-If you don't feel so confident digging in someone else's sources, use [this tracker](http://github.com/epi/xedisk/issues).
+If you don't feel so confident digging in someone else's sources, use
+[this tracker](http://github.com/epi/xedisk/issues).
 
 Authors
 -------
