@@ -318,6 +318,8 @@ unittest
 class XePartition
 {
 	abstract XeDisk getAsDisk();
+	abstract ulong getSectors();
+	abstract ulong getFirstSector();
 }
 
 class XePartitionTable

@@ -114,6 +114,18 @@ class IdeaPartition : XePartition
 			(_pi.status & PartitionStatus.ReadOnly) != 0);
 	}
 
+	override ulong getSectors()
+	{
+		switch (_pi.clsize)
+		{
+		case PartitionSectorSize.B256: return (_pi.len + 1) / 2;
+		case PartitionSectorSize.B512: return _pi.len;
+		default: assert(false);
+		}
+	}
+
+	override ulong getFirstSector() { return _pi.begin + 1; }
+
 private:
 	this(RandomAccessStream st, PartitionInfo pi)
 	{
