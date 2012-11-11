@@ -80,7 +80,8 @@ private:
 	}
 
 	this(RandomAccessStream stream, uint firstSector, uint numSectors,
-		uint sectorSize, uint singleDensitySectors, bool readOnly)
+		uint sectorSize, uint singleDensitySectors, bool readOnly,
+		XeDiskOpenMode mode)
 	{
 		_stream = stream;
 		_firstSector = firstSector;
@@ -88,6 +89,7 @@ private:
 		_sectorSize = sectorSize;
 		_singleDensitySectors = singleDensitySectors;
 		_readOnly = readOnly;
+		_openMode = mode;
 	}
 
 	RandomAccessStream _stream;
@@ -100,7 +102,7 @@ private:
 
 class IdeaPartition : XePartition
 {
-	override XeDisk getAsDisk()
+	override XeDisk getAsDisk(XeDiskOpenMode mode)
 	{
 		uint sectorSize;
 		switch (_pi.clsize)
@@ -111,7 +113,7 @@ class IdeaPartition : XePartition
 		}
 		return new IdeaPartitionAsDisk(_stream, _pi.begin, _pi.len,
 			sectorSize, sectorSize == 512 ? 0 : 3,
-			(_pi.status & PartitionStatus.ReadOnly) != 0);
+			(_pi.status & PartitionStatus.ReadOnly) != 0, mode);
 	}
 
 	override ulong getSectors()
@@ -266,7 +268,7 @@ private:
 		registerType("IDEa", &tryOpen);
 	}
 
-	static IdeaPartitionTable tryOpen(RandomAccessStream stream, XeDiskOpenMode mode)
+	static IdeaPartitionTable tryOpen(RandomAccessStream stream)
 	{
 		auto result = new IdeaPartitionTable(stream);
 		if (stream.read(0, result._data.raw) < result._data.raw.length)
@@ -296,7 +298,7 @@ private:
 unittest
 {
 	scope stream = new FileStream(File("testfiles/sdc.mbr", "rb"));
-	scope pt = IdeaPartitionTable.tryOpen(stream, XeDiskOpenMode.ReadOnly);
+	scope pt = IdeaPartitionTable.tryOpen(stream);
 	assert(pt);
 	assert(walkLength(pt[]) == 6);
 	auto r = pt[];

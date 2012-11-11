@@ -317,19 +317,19 @@ unittest
 
 class XePartition
 {
-	abstract XeDisk getAsDisk();
+	abstract XeDisk getAsDisk(XeDiskOpenMode mode);
 	abstract ulong getSectors();
 	abstract ulong getFirstSector();
 }
 
 class XePartitionTable
 {
-	static XePartitionTable open(RandomAccessStream stream, XeDiskOpenMode mode)
+	static XePartitionTable open(RandomAccessStream stream)
 	{
 		XePartitionTable[] found;
 		foreach (t; _types)
 		{
-			auto pt = t.tryOpen(stream, mode);
+			auto pt = t.tryOpen(stream);
 			if (pt)
 				found ~= pt;
 		}
@@ -342,7 +342,7 @@ class XePartitionTable
 
 	protected static void registerType(
 		string type,
-		XePartitionTable function(RandomAccessStream s, XeDiskOpenMode mode) tryOpen)
+		XePartitionTable function(RandomAccessStream s) tryOpen)
 	{
 		type = toUpper(type);
 		_types[type] = TypeDelegates(tryOpen);
@@ -354,7 +354,7 @@ class XePartitionTable
 private:
 	struct TypeDelegates
 	{
-		XePartitionTable function(RandomAccessStream s, XeDiskOpenMode mode) tryOpen;
+		XePartitionTable function(RandomAccessStream s) tryOpen;
 	}
 
 	static Nullable!TypeDelegates[string] _types;

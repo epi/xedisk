@@ -75,12 +75,13 @@ private:
 	}
 
 	this(RandomAccessStream stream, uint firstSector, uint numSectors,
-		string typeString)
+		string typeString, XeDiskOpenMode mode)
 	{
 		_stream = stream;
 		_firstSector = firstSector;
 		_numSectors = numSectors;
 		_typeString = typeString;
+		_openMode = mode;
 	}
 
 	RandomAccessStream _stream;
@@ -91,13 +92,13 @@ private:
 
 class MsdosPartition : XePartition
 {
-	override XeDisk getAsDisk()
+	override XeDisk getAsDisk(XeDiskOpenMode mode)
 	{
 		if (!_disk)
 		{
 			_disk = new MsdosPartitionAsDisk(_stream, _entry.lbaFirst,
 				_entry.sectors, _partitionTypeStrings.get(_entry.type,
-				"Unknown type"));
+				"Unknown type"), mode);
 		}
 		return _disk;
 	}
@@ -246,7 +247,7 @@ private:
 		registerType("MS-DOS", &tryOpen);
 	}
 
-	static MsdosPartitionTable tryOpen(RandomAccessStream stream, XeDiskOpenMode mode)
+	static MsdosPartitionTable tryOpen(RandomAccessStream stream)
 	{
 		auto result = new MsdosPartitionTable(stream);
 		if (stream.read(0, result._mbr.raw) < result._mbr.raw.length)
@@ -282,7 +283,7 @@ private:
 unittest
 {
 	scope stream = new FileStream(File("testfiles/sda.mbr", "rb"));
-	scope pt = MsdosPartitionTable.tryOpen(stream, XeDiskOpenMode.ReadOnly);
+	scope pt = MsdosPartitionTable.tryOpen(stream);
 	assert(pt);
 	assert(walkLength(pt[]) == 3);
 
