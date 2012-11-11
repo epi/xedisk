@@ -8,6 +8,8 @@ src_libtest := $(src_lib) streamimpl.d xedisk.d
 src_xedisk  := $(src_lib) streamimpl.d xedisk.d
 src_all     := $(subst ./,,$(shell find . -name "*.d"))
 
+src_efdisk  := efdisk.d xe/bytemanip.d getgeo.o
+
 DMD = dmd
 DFLAGS = -debug -wi -g
 #DFLAGS = -O -release -inline -w
@@ -34,8 +36,9 @@ EXEPREFIX :=
 endif
 
 XEDISK_EXE := xedisk$(EXESUFFIX)
+EFDISK_EXE := efdisk$(EXESUFFIX)
 
-all: $(XEDISK_EXE) xedisk.html
+all: $(XEDISK_EXE) $(EFDISK_EXE) xedisk.html
 
 test: unittest$(EXESUFFIX)
 	$(EXEPREFIX)unittest$(EXESUFFIX) && echo && tail -n 1 *.lst | grep covered
@@ -52,6 +55,12 @@ windist: xedisk-$(VERSION)-windows.zip
 
 $(XEDISK_EXE): $(src_xedisk)
 	$(DMD) $(DFLAGS) -Jdos -of$@ $^
+
+$(EFDISK_EXE): $(src_efdisk)
+	$(DMD) $(DFLAGS) -of$@ $^
+
+getgeo.o: getgeo.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 xedisk.html: README.md
 	$(MARKDOWN) $< >$@
