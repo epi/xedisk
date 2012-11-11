@@ -1,7 +1,7 @@
 VERSION = 1.0.0
 
 src_lib     := xe/streams.d xe/bytemanip.d xe/exception.d \
-	xe/disk.d xe/disk_impl/atr.d xe/disk_impl/xfd.d xe/disk_impl/idea.d \
+	xe/disk.d xe/disk_impl/atr.d xe/disk_impl/xfd.d xe/disk_impl/idea.d xe/disk_impl/msdos.d \
 	xe/fs.d xe/fs_impl/cache.d xe/fs_impl/vtoc.d xe/fs_impl/mydos.d xe/fs_impl/sparta.d
 src_ddoc    := xe/streams.d xe/bytemanip.d xe/exception.d xe/disk.d xe/fs.d xe/fs_impl/cache.d xedisk.ddoc
 src_libtest := $(src_lib) streamimpl.d xedisk.d
