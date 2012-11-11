@@ -109,7 +109,10 @@ final class SectorCache
 
 	~this()
 	{
-		flush();
+		try
+			flush();
+		catch (Exception e)
+			stderr.writeln("Exception while flushing the cache: ", e);
 		debug
 		{
 			CacheEntry* centry = _mru;
