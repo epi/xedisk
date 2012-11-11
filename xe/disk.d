@@ -326,13 +326,18 @@ class XePartitionTable
 {
 	static XePartitionTable open(RandomAccessStream stream, XeDiskOpenMode mode)
 	{
+		XePartitionTable[] found;
 		foreach (t; _types)
 		{
 			auto pt = t.tryOpen(stream, mode);
 			if (pt)
-				return pt;
+				found ~= pt;
 		}
-		return null;
+		if (found.length == 0)
+			return null;
+		if (found.length == 1)
+			return found[0];
+		return new MultiTable(found);
 	}
 
 	protected static void registerType(
@@ -353,4 +358,26 @@ private:
 	}
 
 	static Nullable!TypeDelegates[string] _types;
+}
+
+private class MultiTable : XePartitionTable
+{
+	override ForwardRange!XePartition opSlice()
+	{
+		return inputRangeObject(_subtables.map!(pt => pt[]).joiner());
+	}
+
+	override string getType()
+	{
+		return "Combined(" ~
+			std.string.join(map!(pt => pt.getType())(_subtables), ", ") ~ ")";
+	}
+
+private:
+	this(XePartitionTable[] subtables)
+	{
+		_subtables = subtables;
+	}
+
+	XePartitionTable[] _subtables;
 }
