@@ -182,8 +182,7 @@ ScopedHandles openPartitionTable(string fileName, OpenMode mode)
 {
 	assert(mode != OpenMode.Create);
 	auto sh = openFileStream(fileName, mode);
-	sh.table = XePartitionTable.open(sh.stream, mode == OpenMode.ReadOnly
-			? XeDiskOpenMode.ReadOnly : XeDiskOpenMode.ReadWrite);
+	sh.table = XePartitionTable.open(sh.stream);
 	return sh;
 }
 
@@ -196,7 +195,8 @@ ScopedHandles openPartition(string fileName, uint part, OpenMode mode)
 		auto r = sh.table[];
 		while (p < part && !r.empty) { ++p; r.popFront(); }
 		if (p == part && !r.empty)
-			sh.disk = r.front.getAsDisk();
+			sh.disk = r.front.getAsDisk(mode == OpenMode.ReadOnly
+				? XeDiskOpenMode.ReadOnly : XeDiskOpenMode.ReadWrite);
 		else
 			throw new Exception("Must specify a valid partition number");
 	}
@@ -769,7 +769,7 @@ void listPartitions(string[] args)
 		"Ph.Sectors", "Sectors", "BPS", "Type");
 	foreach (partition; sh.table)
 	{
-		scope disk = partition.getAsDisk();
+		scope disk = partition.getAsDisk(XeDiskOpenMode.ReadOnly);
 		writefln("%3d. %10d %10d %10d  %10d %4d  %s",
 			++i, partition.getFirstSector(),
 			partition.getFirstSector() + partition.getSectors() - 1,
