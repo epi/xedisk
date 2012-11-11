@@ -50,7 +50,10 @@ class MsdosPartitionAsDisk : XeDisk
 		throw new XeException("Not implemented");
 	}
 
-	override string getType() const pure nothrow { return "MS-DOS partition"; }
+	override string getType() const pure nothrow
+	{
+		return "MS-DOS partition (" ~ _typeString ~ ")";
+	}
 
 protected:
 	override size_t doReadSector(uint sector, ubyte[] buffer)
@@ -71,16 +74,19 @@ private:
 		return (cast(size_t) _firstSector + sector - 1) * 512;
 	}
 
-	this(RandomAccessStream stream, uint firstSector, uint numSectors)
+	this(RandomAccessStream stream, uint firstSector, uint numSectors,
+		string typeString)
 	{
 		_stream = stream;
 		_firstSector = firstSector;
 		_numSectors = numSectors;
+		_typeString = typeString;
 	}
 
 	RandomAccessStream _stream;
 	uint _firstSector;
 	uint _numSectors;
+	string _typeString;
 }
 
 class MsdosPartition : XePartition
@@ -90,7 +96,8 @@ class MsdosPartition : XePartition
 		if (!_disk)
 		{
 			_disk = new MsdosPartitionAsDisk(_stream, _entry.lbaFirst,
-				_entry.sectors);
+				_entry.sectors, _partitionTypeStrings.get(_entry.type,
+				"Unknown type"));
 		}
 		return _disk;
 	}
@@ -107,6 +114,28 @@ private:
 	{
 		_stream = st;
 		_entry = entry;
+	}
+
+	static immutable(string[ubyte]) _partitionTypeStrings;
+	static this()
+	{
+		_partitionTypeStrings = [
+			0x01: "DOS 12-bit FAT",
+			0x04: "DOS 3.0+ 16-bit FAT (up to 32M)",
+			0x05: "DOS 3.3+ Extended Partition",
+			0x06: "DOS 3.31+ 16-bit FAT (over 32M)",
+			0x07: "Windows NT NTFS / exFAT",
+			0x0b: "WIN95 OSR2 FAT32",
+			0x0c: "WIN95 OSR2 FAT32, LBA-mapped",
+			0x0e: "WIN95: DOS 16-bit FAT, LBA-mapped",
+			0x0f: "WIN95: Extended partition, LBA-mapped",
+			0x5d: "KMK/JZ (IDEa) Span",
+			0x5e: "R0l0Player 3",
+			0x7f: "Atari Partition Table Span",
+			0x82: "Linux swap",
+			0x83: "Linux native partition",
+			0x85: "Linux extended partition"
+		];
 	}
 
 	RandomAccessStream _stream;
