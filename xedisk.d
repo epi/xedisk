@@ -765,15 +765,17 @@ void listPartitions(string[] args)
 	auto sh = openPartitionTable(args[2], OpenMode.ReadOnly);
 	enforce(sh.table, "The image does not contain a valid partition table");
 	uint i;
-	writefln("%3s  %10s %10s %10s  %10s %4s", "#", "Ph.Start", "Ph.End", "Ph.Sectors", "Sectors", "BPS");
+	writefln("%3s  %10s %10s %10s  %10s %4s  %s", "#", "Ph.Start", "Ph.End",
+		"Ph.Sectors", "Sectors", "BPS", "Type");
 	foreach (partition; sh.table)
 	{
 		scope disk = partition.getAsDisk();
-		writefln("%3d. %10d %10d %10d  %10d %4d",
+		writefln("%3d. %10d %10d %10d  %10d %4d  %s",
 			++i, partition.getFirstSector(),
 			partition.getFirstSector() + partition.getSectors() - 1,
 			partition.getSectors(),
-			disk.getSectors(), disk.getSectorSize());
+			disk.getSectors(), disk.getSectorSize(),
+			disk.getType());
 	}
 }
 
