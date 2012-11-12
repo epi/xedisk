@@ -37,9 +37,9 @@ version (unittest)
 	import streamimpl;
 }
 
-class MsdosPartitionAsDisk : XeDisk
+class MsdosPartition : XePartition
 {
-	override uint getSectors() { return _numSectors; }
+	override uint getSectors() { return _entry.sectors; }
 
 	override uint getSectorSize(uint sector = 0) { return 512; }
 
@@ -55,6 +55,10 @@ class MsdosPartitionAsDisk : XeDisk
 		return "MS-DOS partition (" ~ _typeString ~ ")";
 	}
 
+	override ulong getPhysicalSectors() { return _entry.sectors; }
+
+	override ulong getFirstSector() { return _entry.lbaFirst; }
+
 protected:
 	override size_t doReadSector(uint sector, ubyte[] buffer)
 	{
@@ -69,52 +73,17 @@ protected:
 	}
 
 private:
-	size_t streamPosition(uint sector)
-	{
-		return (cast(size_t) _firstSector + sector - 1) * 512;
-	}
-
-	this(RandomAccessStream stream, uint firstSector, uint numSectors,
-		string typeString, XeDiskOpenMode mode)
-	{
-		_stream = stream;
-		_firstSector = firstSector;
-		_numSectors = numSectors;
-		_typeString = typeString;
-		_openMode = mode;
-	}
-
-	RandomAccessStream _stream;
-	uint _firstSector;
-	uint _numSectors;
-	string _typeString;
-}
-
-class MsdosPartition : XePartition
-{
-	override XeDisk getAsDisk(XeDiskOpenMode mode)
-	{
-		if (!_disk)
-		{
-			_disk = new MsdosPartitionAsDisk(_stream, _entry.lbaFirst,
-				_entry.sectors, _partitionTypeStrings.get(_entry.type,
-				"Unknown type"), mode);
-		}
-		return _disk;
-	}
-
-	override ulong getSectors()
-	{
-		return _entry.sectors;
-	}
-
-	override ulong getFirstSector() { return _entry.lbaFirst; }
-
-private:
 	this(RandomAccessStream st, PartitionEntry entry)
 	{
 		_stream = st;
 		_entry = entry;
+		_typeString = _partitionTypeStrings.get(_entry.type, "Unknown type");
+		_openMode = XeDiskOpenMode.ReadWrite;
+	}
+
+	size_t streamPosition(uint sector)
+	{
+		return (cast(size_t) _entry.lbaFirst + sector - 1) * 512;
 	}
 
 	static immutable(string[ubyte]) _partitionTypeStrings;
@@ -142,6 +111,7 @@ private:
 	RandomAccessStream _stream;
 	PartitionEntry _entry;
 	XeDisk _disk;
+	string _typeString;
 }
 
 struct CHS

@@ -315,10 +315,9 @@ unittest
 	writeln("XeDisk (4) ok");
 }
 
-class XePartition
+class XePartition : XeDisk
 {
-	abstract XeDisk getAsDisk(XeDiskOpenMode mode);
-	abstract ulong getSectors();
+	abstract ulong getPhysicalSectors();
 	abstract ulong getFirstSector();
 }
 

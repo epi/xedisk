@@ -37,17 +37,29 @@ version (unittest)
 	import streamimpl;
 }
 
-class IdeaPartitionAsDisk : XeDisk
+class IdeaPartition : XePartition
 {
-	override uint getSectors() { return _numSectors; }
-
 	override uint getSectorSize(uint sector = 0)
 	{
-		return (sector == 0 || sector > _singleDensitySectors)
-			? _sectorSize : 128;
+		if (_pi.clsize == PartitionSectorSize.B256)
+		{
+			if (sector >= 1 && sector <= 3)
+				return 128;
+			else
+				return 256;
+		}
+		else if (_pi.clsize == PartitionSectorSize.B512)
+		{
+			return 512;
+		}
+		else
+			assert(false);
 	}
 
-	override bool isWriteProtected() { return _readOnly; }
+	override bool isWriteProtected()
+	{
+		return (_pi.status & PartitionStatus.ReadOnly) != 0;
+	}
 
 	override void setWriteProtected(bool value)
 	{
@@ -56,11 +68,28 @@ class IdeaPartitionAsDisk : XeDisk
 
 	override string getType() const pure nothrow { return "IDEa partition"; }
 
+	override uint getSectors()
+	{
+		return _pi.len;
+	}
+
+	override ulong getPhysicalSectors()
+	{
+		if (_pi.clsize == PartitionSectorSize.B256)
+			return (_pi.len + 1) / 2;
+		else if (_pi.clsize == PartitionSectorSize.B512)
+			return _pi.len;
+		assert(false);
+	}
+
+	override ulong getFirstSector() { return _pi.begin + 1; }
+
 protected:
 	override size_t doReadSector(uint sector, ubyte[] buffer)
 	{
 		auto len = min(buffer.length, getSectorSize(sector));
-		return _stream.read(streamPosition(sector), buffer[0 .. len]);
+		auto res = _stream.read(streamPosition(sector), buffer[0 .. len]);
+		return res;
 	}
 
 	override void doWriteSector(uint sector, in ubyte[] buffer)
@@ -70,69 +99,19 @@ protected:
 	}
 
 private:
-	size_t streamPosition(uint sector)
-	{
-		if (_sectorSize == 256)
-			return (_firstSector + 1) * 512 + (sector ^ 1) * 256;
-		else if (_sectorSize == 512)
-			return (_firstSector + sector) * 512;
-		assert(false);
-	}
-
-	this(RandomAccessStream stream, uint firstSector, uint numSectors,
-		uint sectorSize, uint singleDensitySectors, bool readOnly,
-		XeDiskOpenMode mode)
-	{
-		_stream = stream;
-		_firstSector = firstSector;
-		_numSectors = numSectors;
-		_sectorSize = sectorSize;
-		_singleDensitySectors = singleDensitySectors;
-		_readOnly = readOnly;
-		_openMode = mode;
-	}
-
-	RandomAccessStream _stream;
-	uint _firstSector;
-	uint _numSectors;
-	uint _sectorSize;
-	uint _singleDensitySectors;
-	bool _readOnly;
-}
-
-class IdeaPartition : XePartition
-{
-	override XeDisk getAsDisk(XeDiskOpenMode mode)
-	{
-		uint sectorSize;
-		switch (_pi.clsize)
-		{
-		case PartitionSectorSize.B256: sectorSize = 256; break;
-		case PartitionSectorSize.B512: sectorSize = 512; break;
-		default: assert(false);
-		}
-		return new IdeaPartitionAsDisk(_stream, _pi.begin, _pi.len,
-			sectorSize, sectorSize == 512 ? 0 : 3,
-			(_pi.status & PartitionStatus.ReadOnly) != 0, mode);
-	}
-
-	override ulong getSectors()
-	{
-		switch (_pi.clsize)
-		{
-		case PartitionSectorSize.B256: return (_pi.len + 1) / 2;
-		case PartitionSectorSize.B512: return _pi.len;
-		default: assert(false);
-		}
-	}
-
-	override ulong getFirstSector() { return _pi.begin + 1; }
-
-private:
 	this(RandomAccessStream st, PartitionInfo pi)
 	{
 		_stream = st;
 		_pi = pi;
+	}
+
+	size_t streamPosition(uint sector)
+	{
+		if (_pi.clsize == PartitionSectorSize.B256)
+			return (_pi.begin + 1) * 512 + (sector ^ 1) * 256;
+		else if (_pi.clsize == PartitionSectorSize.B512)
+			return (_pi.begin + sector) * 512;
+		assert(false);
 	}
 
 	RandomAccessStream _stream;
