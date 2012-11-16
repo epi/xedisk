@@ -22,6 +22,7 @@ module xe.bytemanip;
 
 import std.algorithm;
 import std.range;
+import std.bitmanip;
 
 pure nothrow uint makeWord(T)(T[] bytes...)
 {
@@ -71,3 +72,8 @@ unittest
 	static assert(getByte!0(0xdeadbeef) == 0xef);
 	writeln("getByte (1) ok");
 }
+
+alias littleEndianToNative leton;
+alias bigEndianToNative beton;
+alias nativeToLittleEndian ntole;
+alias nativeToBigEndian ntobe;
