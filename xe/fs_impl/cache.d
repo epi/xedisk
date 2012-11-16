@@ -24,6 +24,7 @@ debug import std.stdio;
 import std.exception;
 import std.algorithm;
 import std.system;
+import std.traits;
 import xe.bytemanip;
 import xe.disk;
 
@@ -77,8 +78,8 @@ struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == st
 	}
 
 	ubyte opIndex(size_t index) const { assert (_impl); return _impl._data[index]; }
-	T opIndexAssign(T)(T val, size_t index) { assert (_impl); _impl._dirty = true; return _impl._data[index] = cast(ubyte) val; }
-	T opIndexOpAssign(string op, T)(T val, size_t index) { assert (_impl); _impl._dirty = true; return mixin("_impl._data[index] " ~ op ~ "= val"); }
+	T opIndexAssign(T)(T val, size_t index) { assert (_impl); _impl._dirty = true; return cast(T) (_impl._data[index] = cast(ubyte) val); }
+	T opIndexOpAssign(string op, T)(T val, size_t index) { assert (_impl); _impl._dirty = true; return cast(T) (mixin("_impl._data[index] " ~ op ~ "= val")); }
 	const(ubyte)[] opSlice() const { assert (_impl); return _impl._data[]; }
 	const(ubyte)[] opSlice(size_t begin, size_t end) const { assert (_impl); return _impl._data[begin .. end]; }
 	void opSliceAssign(ubyte data) { assert (_impl); _impl._data[] = data; _impl._dirty = true; }
@@ -116,20 +117,54 @@ struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == st
 	static if (is(S == struct))
 	{
 		@property void opDispatch(string field, T)(T value)
+			if (__traits(compiles, mixin("S.init." ~ field)))
 		{
 			mixin("alias typeof(S.init." ~ field ~ ") FT;");
-			static if (en == Endian.littleEndian)
-				put!FT(mixin("S.init." ~ field ~ ".offsetof"), value);
-			else
-				put!FT(mixin("S.init." ~ field ~ ".offsetof"), value);
+			static if (is(FT : ubyte))
+			{
+				this[mixin("S.init." ~ field ~ ".offsetof")] = value;
+			}
+			else static if (isIntegral!FT && FT.sizeof >= 2)
+			{
+				static if (en == Endian.littleEndian)
+					put!FT(mixin("S.init." ~ field ~ ".offsetof"), value);
+				else
+					put!FT(mixin("S.init." ~ field ~ ".offsetof"), value);
+			}
+			else static if (isStaticArray!FT || isDynamicArray!FT)
+			{
+				this[mixin("S.init." ~ field ~ ".offsetof") ..
+					mixin("S.init." ~ field ~ ".offsetof") +
+					mixin("S.init." ~ field ~ ".sizeof")] =
+						cast(const(ubyte)[]) value[];
+			}
+			else static assert(false,
+				"Set field forwarding not supported for type `" ~ FT.stringof ~ "'");
 		}
+
 		@property auto opDispatch(string field)()
+			if (__traits(compiles, mixin("S.init." ~ field)))
 		{
 			mixin("alias typeof(S.init." ~ field ~ ") FT;");
-			static if (en == Endian.littleEndian)
-				return get!FT(mixin("S.init." ~ field ~ ".offsetof"));
-			else
-				return get!FT(mixin("S.init." ~ field ~ ".offsetof"));
+			static if (isIntegral!FT && FT.sizeof >= 2)
+			{
+				static if (en == Endian.littleEndian)
+					return get!FT(mixin("S.init." ~ field ~ ".offsetof"));
+				else
+					return get!FT(mixin("S.init." ~ field ~ ".offsetof"));
+			}
+			else static if (is(FT : ubyte))
+			{
+				return cast(FT) this[mixin("S.init." ~ field ~ ".offsetof")];
+			}
+			else static if (is(FT T : U[N], U : ubyte, size_t N))
+			{
+				return cast(const(U)[])
+					this[mixin("S.init." ~ field ~ ".offsetof") ..
+						mixin("S.init." ~ field ~ ".offsetof") + N];
+			}
+			else static assert(false,
+				"Get field forwarding not supported for type `" ~ FT.stringof ~ "'");
 		}
 
 		void opAssign(ref S rhs)
