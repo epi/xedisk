@@ -23,7 +23,15 @@ module xe.fs_impl.cache;
 debug import std.stdio;
 import std.exception;
 import std.algorithm;
+import std.system;
+import xe.bytemanip;
 import xe.disk;
+
+version(unittest)
+{
+	import std.stdio;
+	import streamimpl;
+}
 
 // TODO: transactions?
 // TODO: underlying disk should notify the cache about changes done externally (by other processes)
@@ -32,7 +40,7 @@ import xe.disk;
 // reference count is used by SectorCache to ensure the cached sector isn't removed from the cache while it's in use
 
 
-private struct CacheEntry
+private struct CachedSectorImpl
 {
 	// payload
 	uint _sector;
@@ -43,11 +51,11 @@ private struct CacheEntry
 	uint _refs = uint.max / 2;
 
 	// links to manage LRU list
-	CacheEntry* _prev;
-	CacheEntry* _next;
+	CachedSectorImpl* _prev;
+	CachedSectorImpl* _next;
 }
 
-struct CachedSector
+struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == struct) || is(S == void))
 {
 	~this()
 	{
@@ -63,7 +71,7 @@ struct CachedSector
 		++_impl._refs;
 	}
 
-	void opAssign(CachedSector rhs)
+	void opAssign(StructuredCachedSector!S rhs)
 	{
 		swap(_impl, rhs._impl);
 	}
@@ -78,21 +86,83 @@ struct CachedSector
 	void opSliceAssign(ubyte data, size_t begin, size_t end) { assert (_impl); _impl._data[begin .. end] = data; _impl._dirty = true; }
 	void opSliceAssign(in ubyte[] data, size_t begin, size_t end) { assert (_impl); _impl._data[begin .. end] = data[]; _impl._dirty = true; }
 
+	T get(T)(size_t index) const
+	{
+		assert (_impl);
+		ubyte[T.sizeof] tmp = _impl._data[index .. index + T.sizeof][];
+		static if (en == Endian.littleEndian)
+			return leton!T(tmp);
+		else static if (en == Endian.bigEndian)
+			return beton!T(tmp);
+		else static assert(false);
+	}
+
+	void put(T)(size_t index, T val)
+	{
+		assert (_impl);
+		static if (en == Endian.littleEndian)
+			_impl._data[index .. index + T.sizeof] = ntole(val);
+		else static if (en == Endian.bigEndian)
+			_impl._data[index .. index + T.sizeof] = ntobe(val);
+		else static assert(false);
+	}
+
 	pure nothrow @property auto sector() const { assert (_impl); return _impl._sector; }
 	pure nothrow @property auto length() const { assert (_impl); return _impl._data.length; }
 	alias length opDollar;
 
 	pure nothrow @property bool isNull()  const { return _impl is null; }
 
+	static if (is(S == struct))
+	{
+		@property void opDispatch(string field, T)(T value)
+		{
+			mixin("alias typeof(S.init." ~ field ~ ") FT;");
+			static if (en == Endian.littleEndian)
+				put!FT(mixin("S.init." ~ field ~ ".offsetof"), value);
+			else
+				put!FT(mixin("S.init." ~ field ~ ".offsetof"), value);
+		}
+		@property auto opDispatch(string field)()
+		{
+			mixin("alias typeof(S.init." ~ field ~ ") FT;");
+			static if (en == Endian.littleEndian)
+				return get!FT(mixin("S.init." ~ field ~ ".offsetof"));
+			else
+				return get!FT(mixin("S.init." ~ field ~ ".offsetof"));
+		}
+
+		void opAssign(ref S rhs)
+		{
+			foreach (field; __traits(allMembers, S))
+				mixin("this." ~ field ~ " = rhs." ~ field ~ ";");
+		}
+
+		S opCast(Z)() if (is(Z == S))
+		{
+			S result;
+			foreach (field; __traits(allMembers, S))
+				mixin("result." ~ field ~ " = this." ~ field ~ ";");
+			return result;
+		}
+	}
+
+	auto as(Z)()
+	{
+		return StructuredCachedSector!Z(_impl);
+	}
+
 private:
-	this(CacheEntry* impl)
+	this(CachedSectorImpl* impl)
 	{
 		_impl = impl;
 		++_impl._refs;
 	}
 
-	CacheEntry* _impl;
+	CachedSectorImpl* _impl;
 }
+
+alias StructuredCachedSector!void CachedSector;
 
 // a sector may be removed from cache only when its refcount is 1, which means the only
 // reference to it is maintained in the LRU list
@@ -115,7 +185,7 @@ final class SectorCache
 			stderr.writeln("Exception while flushing the cache: ", e);
 		debug
 		{
-			CacheEntry* centry = _mru;
+			CachedSectorImpl* centry = _mru;
 			while (centry)
 			{
 				auto next = centry._next;
@@ -172,9 +242,9 @@ final class SectorCache
 private:
 	XeDisk _disk;
 
-	CacheEntry*[uint] _hashTable;
-	CacheEntry* _mru;
-	CacheEntry* _lru;
+	CachedSectorImpl*[uint] _hashTable;
+	CachedSectorImpl* _mru;
+	CachedSectorImpl* _lru;
 
 	size_t _freeSlots;
 	bool _softLimit;
@@ -200,7 +270,7 @@ private:
 		}
 	}
 
-	void moveToFront(CacheEntry* centry)
+	void moveToFront(CachedSectorImpl* centry)
 	{
 		assert (centry);
 		assert (_mru);
@@ -226,7 +296,7 @@ private:
 			throw new Exception("Disk cache full");
 		if (_freeSlots)
 			--_freeSlots;
-		auto centry = new CacheEntry;
+		auto centry = new CachedSectorImpl;
 		centry._refs = 1;
 		centry._sector = sector;
 		centry._next = _mru;
@@ -273,7 +343,7 @@ private:
 				return;
 			writeln(" mru dirty refs  sec#");
 			writeln("-----------------------");
-			const(CacheEntry)* centry = _mru;
+			const(CachedSectorImpl)* centry = _mru;
 			uint i;
 			while (centry)
 			{
@@ -298,7 +368,6 @@ private:
 
 unittest
 {
-	import streamimpl;
 	scope stream = new MemoryStream(new ubyte[0]);
 	scope disk = XeDisk.create(stream, "ATR", 32, 256);
 	{
@@ -346,4 +415,39 @@ unittest
 		assert(buf[99] == 0x5b);
 	}
 	writeln("SectorCache (1) Ok");
+}
+
+unittest
+{
+	struct SomeStruct
+	{
+		uint a;
+		int b;
+		ushort c;
+	}
+
+	scope stream = new MemoryStream(new ubyte[0]);
+	scope disk = XeDisk.create(stream, "ATR", 32, 256);
+	{
+		scope cache = new SectorCache(disk, 2, false);
+		{
+			auto csec1 = cache.request(19).as!SomeStruct;
+			csec1.a = 0xdeadbeef;
+			csec1.b = -31337;
+			csec1.c = cast(ushort) 0xcafe;
+			assert (csec1.a == 0xdeadbeef);
+			assert (csec1[0 .. 4] == [ 0xef, 0xbe, 0xad, 0xde ]);
+			assert (csec1.b == -31337);
+			assert (csec1.c == 0xcafe);
+			auto ss = cast(SomeStruct) csec1;
+			assert (ss.a == 0xdeadbeef);
+			assert (ss.b == -31337);
+			assert (ss.c == 0xcafe);
+			csec1 = SomeStruct(10, 20, 30);
+			assert (csec1.a == 10);
+			assert (csec1.b == 20);
+			assert (csec1.c == 30);
+		}
+	}
+	writeln("SectorCache (2) Ok");
 }
