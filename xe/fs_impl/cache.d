@@ -120,48 +120,47 @@ struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == st
 			if (__traits(compiles, mixin("S.init." ~ field)))
 		{
 			mixin("alias typeof(S.init." ~ field ~ ") FT;");
+			enum offs = mixin("S.init." ~ field ~ ".offsetof");
 			static if (is(FT : ubyte))
 			{
-				this[mixin("S.init." ~ field ~ ".offsetof")] = value;
+				this[offs] = value;
 			}
 			else static if (isIntegral!FT && FT.sizeof >= 2)
 			{
 				static if (en == Endian.littleEndian)
-					put!FT(mixin("S.init." ~ field ~ ".offsetof"), value);
+					put!FT(offs, value);
 				else
-					put!FT(mixin("S.init." ~ field ~ ".offsetof"), value);
+					put!FT(offs, value);
 			}
-			else static if (isStaticArray!FT || isDynamicArray!FT)
+			else static if (is(FT V : U[N], U : ubyte, size_t N) &&
+				(is(T W : X[], X : ubyte) || is(T W : X[M], W : ubyte, size_t M)))
 			{
-				this[mixin("S.init." ~ field ~ ".offsetof") ..
-					mixin("S.init." ~ field ~ ".offsetof") +
-					mixin("S.init." ~ field ~ ".sizeof")] =
-						cast(const(ubyte)[]) value[];
+				this[offs .. offs + N] = (cast(const(ubyte)[]) value)[];
 			}
-			else static assert(false,
-				"Set field forwarding not supported for type `" ~ FT.stringof ~ "'");
+			else static assert(false, "Cannot assign value of type `" ~
+				T.stringof ~ "' to the field `" ~ S.stringof ~ "." ~ field ~
+				"' of type `" ~ FT.stringof ~ "'");
 		}
 
 		@property auto opDispatch(string field)()
 			if (__traits(compiles, mixin("S.init." ~ field)))
 		{
 			mixin("alias typeof(S.init." ~ field ~ ") FT;");
+			enum offs = mixin("S.init." ~ field ~ ".offsetof");
 			static if (isIntegral!FT && FT.sizeof >= 2)
 			{
 				static if (en == Endian.littleEndian)
-					return get!FT(mixin("S.init." ~ field ~ ".offsetof"));
+					return get!FT(offs);
 				else
-					return get!FT(mixin("S.init." ~ field ~ ".offsetof"));
+					return get!FT(offs);
 			}
 			else static if (is(FT : ubyte))
 			{
-				return cast(FT) this[mixin("S.init." ~ field ~ ".offsetof")];
+				return cast(FT) this[offs];
 			}
-			else static if (is(FT T : U[N], U : ubyte, size_t N))
+			else static if (is(FT V : U[N], U : ubyte, size_t N))
 			{
-				return cast(const(U)[])
-					this[mixin("S.init." ~ field ~ ".offsetof") ..
-						mixin("S.init." ~ field ~ ".offsetof") + N];
+				return cast(const(U)[]) this[offs .. offs + N];
 			}
 			else static assert(false,
 				"Get field forwarding not supported for type `" ~ FT.stringof ~ "'");
@@ -459,6 +458,11 @@ unittest
 		uint a;
 		int b;
 		ushort c;
+		ubyte[3] d;
+		char e;
+		char[4] f;
+		byte g;
+		string z;
 	}
 
 	scope stream = new MemoryStream(new ubyte[0]);
@@ -470,15 +474,24 @@ unittest
 			csec1.a = 0xdeadbeef;
 			csec1.b = -31337;
 			csec1.c = cast(ushort) 0xcafe;
+			csec1.d = cast(ubyte[]) [ 0xaa, 0xbb, 0xcc ];
+			csec1.e = 'a';
+			csec1.f = "test";
+			csec1.g = 0x55;
+			static assert(!__traits(compiles, csec1.d = [ 0xaa, 0xbb, 0xcc ]));
 			assert (csec1.a == 0xdeadbeef);
 			assert (csec1[0 .. 4] == [ 0xef, 0xbe, 0xad, 0xde ]);
 			assert (csec1.b == -31337);
 			assert (csec1.c == 0xcafe);
+			assert (csec1.d == [ 0xaa, 0xbb, 0xcc ]);
+			assert (csec1.e == 'a');
+			assert (csec1.f == "test");
+			assert (csec1.g == 0x55);
 			auto ss = cast(SomeStruct) csec1;
 			assert (ss.a == 0xdeadbeef);
 			assert (ss.b == -31337);
 			assert (ss.c == 0xcafe);
-			csec1 = SomeStruct(10, 20, 30);
+			csec1 = SomeStruct(10, 20, 30, [ 0x66, 0x77, 0x88 ], 'c', "baar", 0x1a);
 			assert (csec1.a == 10);
 			assert (csec1.b == 20);
 			assert (csec1.c == 30);
