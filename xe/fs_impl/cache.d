@@ -18,6 +18,12 @@ You should have received a copy of the GNU General Public License
 along with xedisk.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// TODO: transactions?
+// TODO: underlying disk should notify the cache about changes done externally (by other processes)
+
+// provides a buffered view on a given sector synchronized among all objects which use it.
+// reference count is used by SectorCache to ensure the cached sector isn't removed from the cache while it's in use
+
 module xe.fs_impl.cache;
 
 debug import std.stdio;
@@ -25,6 +31,7 @@ import std.exception;
 import std.algorithm;
 import std.system;
 import std.traits;
+import std.typecons;
 import xe.bytemanip;
 import xe.disk;
 
@@ -33,13 +40,6 @@ version(unittest)
 	import std.stdio;
 	import streamimpl;
 }
-
-// TODO: transactions?
-// TODO: underlying disk should notify the cache about changes done externally (by other processes)
-
-// provides a buffered view on a given sector synchronized among all objects which use it.
-// reference count is used by SectorCache to ensure the cached sector isn't removed from the cache while it's in use
-
 
 private struct CachedSectorImpl
 {
@@ -169,14 +169,24 @@ struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == st
 		void opAssign(ref S rhs)
 		{
 			foreach (field; __traits(allMembers, S))
-				mixin("this." ~ field ~ " = rhs." ~ field ~ ";");
+			{
+				mixin("alias typeof(S.init." ~ field ~ ") FT;");
+				static if (isIntegral!FT || is(FT V : U[N], U : ubyte, size_t N))
+					mixin("this." ~ field ~ " = rhs." ~ field ~ ";");
+			}
 		}
 
 		S opCast(Z)() if (is(Z == S))
 		{
 			S result;
+			// could make this and the loop in opAssign look less repetitive
+			// but the template to do so looked big and ugly
 			foreach (field; __traits(allMembers, S))
-				mixin("result." ~ field ~ " = this." ~ field ~ ";");
+			{
+				mixin("alias typeof(S.init." ~ field ~ ") FT;");
+				static if (isIntegral!FT || is(FT V : U[N], U : ubyte, size_t N))
+					mixin("result." ~ field ~ " = this." ~ field ~ ";");
+			}
 			return result;
 		}
 	}
@@ -453,7 +463,7 @@ unittest
 
 unittest
 {
-	struct SomeStruct
+	static struct SomeStruct
 	{
 		uint a;
 		int b;
@@ -462,7 +472,7 @@ unittest
 		char e;
 		char[4] f;
 		byte g;
-		string z;
+		void func();
 	}
 
 	scope stream = new MemoryStream(new ubyte[0]);
@@ -495,6 +505,8 @@ unittest
 			assert (csec1.a == 10);
 			assert (csec1.b == 20);
 			assert (csec1.c == 30);
+			// static assert (!__traits(compiles, csec1.func));
+			static assert (!__traits(compiles, csec1.func()));
 		}
 	}
 	writeln("SectorCache (2) Ok");
