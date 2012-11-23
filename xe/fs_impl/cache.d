@@ -191,7 +191,7 @@ struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == st
 		}
 	}
 
-	auto as(Z)()
+	@property auto as(Z)()
 	{
 		return StructuredCachedSector!Z(_impl);
 	}
@@ -223,12 +223,12 @@ final class SectorCache
 
 	~this()
 	{
-		try
-			flush();
-		catch (Exception e)
-			stderr.writeln("Exception while flushing the cache: ", e);
 		debug
 		{
+			try
+				flush();
+			catch (Exception e)
+				stderr.writeln("Exception while flushing the cache: ", e);
 			CachedSectorImpl* centry = _mru;
 			while (centry)
 			{
@@ -237,6 +237,10 @@ final class SectorCache
 				clear(*centry);
 				centry = next;
 			}
+		}
+		else
+		{
+			flush();
 		}
 		_mru = null;
 		_lru = null;
