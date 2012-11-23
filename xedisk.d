@@ -29,10 +29,10 @@ import std.getopt;
 import std.file;
 import std.path;
 import xe.disk;
+import xe.disk_impl.all;
 import xe.fs;
 import xe.exception;
 import xe.streams;
-import streamimpl;
 
 auto parseSectorRange(in char[] s, int max)
 {
@@ -526,7 +526,7 @@ void add(string[] args)
 
 	void copyFile(string name, XeDirectory dest)
 	{
-		string bn = makeSureNameIsValid(name.baseName);
+		string bn = makeSureNameIsValid(name.baseName());
 		if (verbose)
 			writefln("`%s' -> `%s/%s'", name, dest.getFullPath(), bn);
 		XeEntry existing;
@@ -553,7 +553,7 @@ void add(string[] args)
 
 	void copyDirectory(string name, XeDirectory dest)
 	{
-		string bn = makeSureNameIsValid(name.baseName);
+		string bn = makeSureNameIsValid(name.baseName());
 		if (verbose)
 			writefln("`%s' -> `%s/%s'", name, dest.getFullPath(), bn);
 		XeEntry existing;
@@ -582,7 +582,7 @@ void add(string[] args)
 		}
 doIt:
 		auto newDir = (existing && existing.isDirectory()) ?
-			cast(XeDirectory) existing : dest.createDirectory(name.baseName);
+			cast(XeDirectory) existing : dest.createDirectory(name.baseName());
 		foreach (DirEntry e; dirEntries(name, SpanMode.shallow))
 		{
 			if (e.isDir)

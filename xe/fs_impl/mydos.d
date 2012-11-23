@@ -799,7 +799,7 @@ private final class MydosFile : XeFile
 		@property auto front() { return _fs._cache.request(_current); }
 		void popFront() { assert (!empty); _current = next(); }
 
-		uint next()
+		@property uint next()
 		{
 			auto l = front.length;
 			auto n = makeWord(front[l - 3 .. l - 1]);
@@ -876,7 +876,7 @@ class MydosFileSystem : XeFileSystem
 	}
 	body
 	{
-		name = name.toLower.tr("a-z0-9@.", "_", "sc");
+		name = name.toLower().tr("a-z0-9@.", "_", "sc");
 		if (name[0].inPattern("0-9"))
 			name = "@" ~ name;
 		auto com = regex(r"^([^.]{1,8})[^.]*(\..{0,3})?.*$");
@@ -894,7 +894,7 @@ class MydosFileSystem : XeFileSystem
 
 	override void writeDosFiles(string dosVersion)
 	{
-		switch (dosVersion.toLower)
+		switch (dosVersion.toLower())
 		{
 		case "mydos450":
 		case "mydos450t":

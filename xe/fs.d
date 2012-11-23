@@ -53,7 +53,7 @@ class XeEntry
 		string result;
 		while (node.getParent())
 		{
-			result = "/" ~ node.getName ~ result;
+			result = "/" ~ node.getName() ~ result;
 			node = node.getParent();
 		}
 		return result;
@@ -214,7 +214,7 @@ class XeDirectory : XeEntry
 			else
 			{
 				auto dir = cast(XeDirectory) node;
-				enforce(dir, format("%s is not a directory", node.getName));
+				enforce(dir, format("%s is not a directory", node.getName()));
 				bool found;
 				foreach (entry; dir.enumerate())
 				{
@@ -222,7 +222,7 @@ class XeDirectory : XeEntry
 					// file system dependent?
 					bool equal = caseSensitive
 						? entry.getName() == el
-						: entry.getName().toLower == el.toLower;
+						: entry.getName().toLower() == el.toLower();
 					if (equal)
 					{
 						node = entry;

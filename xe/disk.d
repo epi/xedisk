@@ -26,6 +26,7 @@ import std.exception;
 import std.range;
 import std.string;
 import std.typecons;
+import std.conv;
 import xe.streams;
 import xe.exception;
 
@@ -81,7 +82,7 @@ class XeDisk
 	{
 		type = toUpper(type);
 		_types[type] = TypeDelegates(tryOpen, doCreate);
-		debug (RegisterDiskType) writefln("Registered disk format %s", type);
+		debug writefln("Registered disk format %s", type);
 	}
 
 	///
@@ -252,7 +253,6 @@ private:
 unittest
 {
 	import std.stdio;
-	import streamimpl;
 
 	assertThrown(XeDisk.create(null, "Nonexistent disk type", 0, 0));
 	writeln("XeDisk (1) ok");
@@ -261,10 +261,9 @@ unittest
 unittest
 {
 	import std.stdio;
-	import streamimpl;
 
-	scope stream = new FileStream(File("testfiles/MYDOS450.ATR"));
-	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
+//	scope stream = new FileStream(File("testfiles/MYDOS450.ATR"));
+	scope disk = new TestDisk("testfiles/MYDOS450.ATR", 16, 128, 3);
 	auto buf1 = new ubyte[1024];
 	auto buf2 = new ubyte[1024];
 	scope istr = disk.openBootLoader();
@@ -279,11 +278,9 @@ unittest
 unittest
 {
 	import std.stdio;
-	import streamimpl;
 
 	auto foo = cast(immutable(ubyte)[]) "foo";
-	scope stream = new MemoryStream(new ubyte[0]);
-	scope disk = XeDisk.create(stream, "ATR", 720, 128);
+	auto disk = new TestDisk(720, 128, 3);
 	auto ostr = disk.createBootLoader();
 	ostr.write(foo);
 	auto buf = new ubyte[128];
@@ -301,18 +298,6 @@ unittest
 	assert (buf[3 .. 6] == foo);
 	assert (buf[6 .. $] == new ubyte[122]);
 	writeln("XeDisk (3) ok");
-}
-
-unittest
-{
-	import std.stdio;
-	import streamimpl;
-
-	scope stream = new FileStream(File("streamimpl.d"));
-	// TODO: test image type
-	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
-//	assertThrown(XeDisk.Open(stream, XeDiskOpenMode.ReadOnly));
-	writeln("XeDisk (4) ok");
 }
 
 class XePartition : XeDisk
@@ -345,6 +330,7 @@ class XePartitionTable
 	{
 		type = toUpper(type);
 		_types[type] = TypeDelegates(tryOpen);
+		debug writefln("Registered partition table type %s", type);
 	}
 
 	abstract ForwardRange!XePartition opSlice();
@@ -363,7 +349,7 @@ private class MultiTable : XePartitionTable
 {
 	override ForwardRange!XePartition opSlice()
 	{
-		return inputRangeObject(_subtables.map!(pt => pt[]).joiner());
+		return inputRangeObject(_subtables.map!(pt => pt[])().joiner());
 	}
 
 	override string getType()
@@ -379,4 +365,110 @@ private:
 	}
 
 	XePartitionTable[] _subtables;
+}
+
+import std.stdio;
+import xe.disk;
+import std.algorithm;
+
+class TestDisk : XeDisk
+{
+	this(uint sectors, uint bytesPerSector, uint singleDensitySectors)
+	{
+		assert(sectors > 0);
+		assert(singleDensitySectors <= sectors);
+		_data = new ubyte[
+			(sectors - singleDensitySectors) * bytesPerSector
+			+ singleDensitySectors * 128];
+		_sectors = sectors;
+		_bytesPerSector = bytesPerSector;
+		_singleDensitySectors = singleDensitySectors;
+		_openMode = XeDiskOpenMode.ReadWrite;
+	}
+
+	unittest
+	{
+		auto d1 = new TestDisk(10, 256, 4);
+		assert(d1._data.length == 2048);
+		assert(d1._sectors == 10);
+		assert(d1._bytesPerSector == 256);
+		assert(d1._singleDensitySectors == 4);
+	}
+
+	/// Read contents of file from specified offset as a raw disk image
+	/// data interpreted according to the specified bytesPerSector and
+	/// singleDensitySectors parameters.
+	this(string filename, ulong offset, uint bytesPerSector,
+		uint singleDensitySectors)
+	{
+		auto f = File(filename);
+		f.seek(offset);
+		foreach (ubyte[] buf; f.byChunk(16384))
+			_data ~= buf;
+		assert(_data.length >= singleDensitySectors * 128);
+		assert((_data.length - singleDensitySectors * 128) % bytesPerSector == 0,
+			text((_data.length - singleDensitySectors * 128) % bytesPerSector));
+		_sectors = cast(uint) (singleDensitySectors +
+			(_data.length - singleDensitySectors * 128) / bytesPerSector);
+		_bytesPerSector = bytesPerSector;
+		_singleDensitySectors = singleDensitySectors;
+		_openMode = XeDiskOpenMode.ReadWrite;
+	}
+
+	unittest
+	{
+		auto d1 = new TestDisk("testfiles/epi.atr", 16, 512, 0);
+		assert(d1._data.length == 720 * 512);
+		assert(d1._sectors == 720);
+		assert(d1._bytesPerSector == 512);
+		assert(d1._singleDensitySectors == 0);
+	}
+
+	override uint getSectors() { return _sectors; }
+
+	override uint getSectorSize(uint sector = 0)
+	{
+		return (sector == 0 || sector > _singleDensitySectors)
+			? _bytesPerSector : 128;
+	}
+
+	override bool isWriteProtected() { return false; }
+
+	override void setWriteProtected(bool value)
+	{
+		throw new Exception("Not implemented");
+	}
+
+	override string getType() const pure nothrow { return "TEST"; }
+
+protected:
+	override size_t doReadSector(uint sector, ubyte[] buffer)
+	{
+		auto len = min(buffer.length, getSectorSize(sector));
+		auto pos = streamPosition(sector);
+		buffer[0 .. len] = _data[pos .. pos + len];
+		return len;
+	}
+
+	override void doWriteSector(uint sector, in ubyte[] buffer)
+	{
+		auto len = min(buffer.length, getSectorSize(sector));
+		auto pos = streamPosition(sector);
+		_data[pos .. pos + len] = buffer[0 .. len];
+	}
+
+private:
+	uint streamPosition(uint sector)
+	{
+		if (sector > _singleDensitySectors)
+			return _singleDensitySectors * 128
+				+ (sector - _singleDensitySectors - 1) * _bytesPerSector;
+		else
+			return (sector - 1) * 128;
+	}
+
+	ubyte[] _data;
+	uint _sectors;
+	uint _bytesPerSector;
+	uint _singleDensitySectors;
 }
