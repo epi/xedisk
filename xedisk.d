@@ -325,14 +325,14 @@ void list(string[] args)
 	sh.fs = XeFileSystem.open(sh.disk);
 
 	size_t nfiles;
-	size_t totalSize;
+	ulong totalSize;
 	string path = args.length > 3 ? args[3] : "/";
 	string mask = args.length > 4 ? args[4] : "*";
 	foreach (entry; sh.fs.listDirectory(path, mask))
 	{
 		if (longFormat)
 		{
-			size_t size = sizeInSectors ? entry.getSectors() : entry.getSize();
+			ulong size = sizeInSectors ? entry.getSectors() : entry.getSize();
 			writefln("%s%s%s%s %10s %s %s",
 				entry.isDirectory() ? "d" : "-",
 				entry.isReadOnly() ? "r" : "-",

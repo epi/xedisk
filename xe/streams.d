@@ -61,26 +61,26 @@ interface OutputStream
 interface RandomAccessStream
 {
 	///
-	size_t getLength();
+	ulong getLength();
 
 	/// for stream users only
-	final size_t read(size_t offset, ubyte[] buffer)
+	final size_t read(ulong offset, ubyte[] buffer)
 	{
 		// some additional checks may be done here in the future
 		return doRead(offset, buffer);
 	}
 
 	/// for stream users only
-	final void write(size_t offset, in ubyte[] buffer)
+	final void write(ulong offset, in ubyte[] buffer)
 	{
 		// some additional checks may be done here in the future
 		doWrite(offset, buffer);
 	}
 
 	/// for stream implementors only
-	protected size_t doRead(size_t offset, ubyte[] buffer);
+	protected size_t doRead(ulong offset, ubyte[] buffer);
 	/// for stream implementors only
-	protected void doWrite(size_t offset, in ubyte[] buffer);
+	protected void doWrite(ulong offset, in ubyte[] buffer);
 }
 
 /*class FileInputStream : InputStream
@@ -163,7 +163,7 @@ class FileStream : RandomAccessStream
 		file_ = f;
 	}
 
-	override size_t getLength()
+	override ulong getLength()
 	{
 		auto l = file_.size();
 		if (l == ulong.max || l > int.max)
@@ -171,14 +171,14 @@ class FileStream : RandomAccessStream
 		return l;
 	}
 
-	override size_t doRead(size_t offset, ubyte[] buffer)
+	override size_t doRead(ulong offset, ubyte[] buffer)
 	{
 		file_.seek(offset);
 		auto r = file_.rawRead(buffer);
 		return r.length;
 	}
 
-	override void doWrite(size_t offset, in ubyte[] buffer)
+	override void doWrite(ulong offset, in ubyte[] buffer)
 	{
 		file_.seek(offset);
 		file_.rawWrite(buffer);
@@ -250,25 +250,27 @@ class MemoryStream : RandomAccessStream
 		this.array = array;
 	}
 
-	override size_t getLength()
+	override ulong getLength()
 	{
 		return array.length;
 	}
 
-	override size_t doRead(size_t offset, ubyte[] buffer)
+	override size_t doRead(ulong offset, ubyte[] buffer)
 	{
 		if (offset >= array.length)
 			return 0;
-		auto len = min(array.length - offset, buffer.length);
-		buffer[0 .. len] = array[offset .. offset + len];
+		auto len = min(array.length - cast(size_t) offset, buffer.length);
+		buffer[0 .. len] =
+			array[cast(size_t) offset .. cast(size_t) offset + len];
 		return len;
 	}
 
-	override void doWrite(size_t offset, in ubyte[] buffer)
+	override void doWrite(ulong offset, in ubyte[] buffer)
 	{
 		if (offset + buffer.length > array.length)
-			array.length = offset + buffer.length;
-		array[offset .. offset + buffer.length] = buffer[];
+			array.length = cast(size_t) offset + buffer.length;
+		array[cast(size_t) offset .. cast(size_t) offset + buffer.length]
+			= buffer[];
 	}
 
 	ubyte[] array;
