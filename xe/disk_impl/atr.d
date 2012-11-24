@@ -26,10 +26,9 @@ import xe.disk;
 import xe.streams;
 import xe.bytemanip;
 
-version (unittest)
+version(unittest)
 {
-	import std.stdio;
-	import streamimpl;
+	import xe.test;
 }
 
 class AtrDisk : XeDisk
@@ -53,7 +52,7 @@ class AtrDisk : XeDisk
 
 	override string getType() const pure nothrow { return "ATR"; }
 
-	static this()
+	shared static this()
 	{
 		registerType("ATR", &tryOpen, &doCreate);
 	}
@@ -172,14 +171,15 @@ private:
 
 unittest
 {
+	mixin(Test!"AtrDisk.makeHeader (1)");
 	assert(AtrDisk.makeHeader(20720, 256, true) == cast(ubyte[]) [
 		0x96, 0x02, 0xe8, 0x0e, 0x00, 0x01, 0x05, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 ]);
-	writeln("AtrDisk.makeHeader (1) ok");
 }
 
 unittest
 {
+	mixin(Test!"AtrDisk.tryOpen (1)");
 	enum Sectors = 720;
 	enum SectorSize = 192;
 	enum Size = 3 * 128 + (Sectors - 3) * SectorSize;
@@ -188,11 +188,11 @@ unittest
 			Sectors, SectorSize) ~ new ubyte[Size]);
 		assert (!AtrDisk.tryOpen(stream, XeDiskOpenMode.ReadOnly));
 	}
-	writeln("AtrDisk.tryOpen (1) ok");
 }
 
 unittest
 {
+	mixin(Test!"AtrDisk.doCreate (1)");
 	{
 		scope stream = new MemoryStream(new ubyte[0]);
 		scope disk = AtrDisk.doCreate(stream, 65535, 512);
@@ -205,11 +205,11 @@ unittest
 		assertThrown(AtrDisk.doCreate(stream, 720, 129));
 		assert (stream.getLength() == 0);
 	}
-	writeln("AtrDisk.doCreate (1) ok");
 }
 
 unittest
 {
+	mixin(Test!"AtrDisk (1)");
 	scope stream = new FileStream(File("testfiles/MYDOS450.ATR"));
 	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
 	auto buf = new ubyte[257];
@@ -227,11 +227,11 @@ unittest
 	assert (disk.readSector(3, buf) == 128);
 	assert (disk.readSector(4, buf) == disk.getSectorSize(4));
 	assert (disk.readSector(720, buf) == disk.getSectorSize(720));
-	writeln("AtrDisk (1) ok");
 }
 
 unittest
 {
+	mixin(Test!"AtrDisk (2)");
 	enum Sectors = 720;
 	enum Size = AtrDisk.HeaderLength + 3 * 128 + (Sectors - 3) * 256;
 	enum NPar = (Size - AtrDisk.HeaderLength) / AtrDisk.Paragraph;
@@ -256,12 +256,11 @@ unittest
 		scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
 		assert (disk.isWriteProtected());
 	}
-
-	writeln("AtrDisk (2) ok");
 }
 
 unittest
 {
+	mixin(Test!"AtrDisk (3)");
 	scope stream = new FileStream(File("testfiles/epi.atr"));
 	scope disk = XeDisk.open(stream);
 	assert (disk.getSectors() == 720);
@@ -269,5 +268,4 @@ unittest
 	assert (disk.getSectorSize(1) == 512);
 	assert (disk.getSectorSize(4) == 512);
 	assert (disk.getSectorSize(720) == 512);
-	writeln("AtrDisk (3) ok");
 }

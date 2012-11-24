@@ -31,8 +31,20 @@ import std.path;
 import xe.disk;
 import xe.disk_impl.all;
 import xe.fs;
+import xe.fs_impl.all;
 import xe.exception;
 import xe.streams;
+
+version(unittest)
+{
+	import xe.test;
+
+	XeEntry findOnDisk(string disk, string file)
+	{
+		return XeFileSystem.open(XeDisk.open(new FileStream(File(disk))))
+			.getRootDirectory().find(file);
+	}
+}
 
 auto parseSectorRange(in char[] s, int max)
 {
@@ -50,76 +62,13 @@ auto parseSectorRange(in char[] s, int max)
 
 unittest
 {
+	mixin(Test!"parseSectorRange (1)");
 	assertThrown(parseSectorRange("120-d", 23));
 	assert (parseSectorRange("120", 720).length == 1);
 	assert (parseSectorRange("600-", 720).length == 121);
 	assert (parseSectorRange("120-123", 720).length == 4);
 	assert (parseSectorRange("-5", 720).length == 5);
 	assert (parseSectorRange("-", 720).length == 720);
-	writeln("parseSectorRange (1) ok");
-}
-
-version (unittest)
-{
-	import std.typecons;
-	import std.c.stdlib;
-
-	extern (C)
-	FILE* fmemopen(void* buf, size_t size, const(char)* mode);
-
-	extern (C)
-	FILE *open_memstream(char** ptr, size_t* sizeloc);
-
-	auto captureConsole(lazy void dg, string cin = "\n")
-	{
-		FILE* fp_cin = fmemopen(cast(void*) cin.ptr, cin.length, "r");
-		if (!fp_cin)
-			throw new Exception("fmemopen failed");
-		scope (exit) fclose(fp_cin);
-
-		size_t cout_size;
-		char* cout_ptr = null;
-		FILE* fp_cout = open_memstream(&cout_ptr, &cout_size);
-		if (!fp_cout)
-			throw new Exception("open_memstream failed for cout");
-		scope (exit) free(cout_ptr);
-		scope (exit) fclose(fp_cout);
-
-		size_t cerr_size;
-		char* cerr_ptr = null;
-		FILE* fp_cerr = open_memstream(&cerr_ptr, &cerr_size);
-		if (!fp_cerr)
-			throw new Exception("open_memstream failed for cerr");
-		scope (exit) if (cerr_ptr) free(cerr_ptr);
-		scope (exit) fclose(fp_cerr);
-
-		auto oldstdin = stdin;
-		stdin = File.wrapFile(fp_cin);
-		scope (exit) stdin = oldstdin;
-
-		auto oldstdout = stdout;
-		stdout = File.wrapFile(fp_cout);
-		scope (exit) stdout = oldstdout;
-
-		auto oldstderr = stderr;
-		stderr = File.wrapFile(fp_cerr);
-		scope (exit) stderr = oldstderr;
-
-		auto e = collectException(dg());
-		fflush(fp_cout);
-		fflush(fp_cerr);
-
-		return tuple(
-			cout_ptr[0 .. cout_size].idup,
-			cerr_ptr[0 .. cerr_size].idup,
-			e);
-	}
-
-	XeEntry findOnDisk(string disk, string file)
-	{
-		return XeFileSystem.open(XeDisk.open(new FileStream(File(disk))))
-			.getRootDirectory().find(file);
-	}
 }
 
 struct ScopedHandles
@@ -231,6 +180,7 @@ void create(string[] args)
 
 unittest
 {
+	mixin(Test!"create (1)");
 	enum disk = "testfiles/ut.atr";
 	auto res = captureConsole(create(["", "", "-x", disk]));
 	assert (res[0] == "");
@@ -241,8 +191,6 @@ unittest
 	assert (res[0] == "");
 	assert (res[1] == "");
 	assert (res[2]);
-
-	writeln("create (1) ok");
 }
 
 // xedisk mkfs [-p partition] -f fstype image
@@ -302,17 +250,17 @@ void info(string[] args)
 
 unittest
 {
+	mixin(Test!"info (1)");
 	enum disk = "testfiles/ut.atr";
 	auto res = captureConsole(info(["", ""]));
 	assert (res[0] == "");
 	assert (res[1] == "");
 	assert (res[2]);
-
-	writeln("info (1) ok");
 }
 
 unittest
 {
+	mixin(Test!"create & info (1)");
 	enum disk = "testfiles/ut.atr";
 	scope (exit) if (exists(disk)) std.file.remove(disk);
 	if (exists(disk)) std.file.remove(disk);
@@ -328,11 +276,11 @@ unittest
 	assert (res[1] == "");
 	assert (cast(XeException) res[2]);
 	assert ((cast(XeException) res[2]).errorCode == 148);
-	writeln("create & info (1) ok");
 }
 
 unittest
 {
+	mixin(Test!"create & info (2)");
 	enum disk = "testfiles/ut.xfd";
 	scope (exit) if (exists(disk)) std.file.remove(disk);
 	if (exists(disk)) std.file.remove(disk);
@@ -355,7 +303,6 @@ unittest
 		"Free sectors:         " ~ to!string(1040 - 3 - 2 - 8) ~ "\n" ~
 		"Free bytes:           " ~ to!string((1040 - 3 - 2 - 8) * 125) ~ "\n");
 	assert (res[1] == "");
-	writeln("create & info (2) ok");
 }
 
 // xedisk list image [-l [-s]] [path]
@@ -414,6 +361,7 @@ void list(string[] args)
 
 unittest
 {
+	mixin(Test!"list (3)");
 	enum disk = "testfiles/MYDOS450.ATR";
 	auto res = captureConsole(list(["", "", disk]));
 	assert (res[0] ==
@@ -453,7 +401,6 @@ unittest
 `);
 	assert (res[1] == "");
 	assert (!res[2]);
-	writeln("list (3) ok");
 }
 
 // xedisk add image [-d=dest_dir] [-r] src_files ...
@@ -610,6 +557,7 @@ doIt:
 
 unittest
 {
+	mixin(Test!"add (1)");
 	enum disk = "testfiles/ut.atr";
 	enum emptyfile = "testfiles/empty_files/DOS25.XFD";
 	enum bigfile = "testfiles/DOS25.XFD";
@@ -649,7 +597,6 @@ unittest
 	res = captureConsole(add(["", "", disk, "-i", emptyfile]), "d\n");
 	assert (!res[2]); // interactive, answers "overwrite"
 	assert (findOnDisk(disk, bigfile_bn).getSize() == 0);
-	writeln("add (1) ok");
 }
 
 // xedisk extract image [files...]
@@ -846,16 +793,9 @@ int xedisk_main(string[] args)
 	throw new XeException(format("Missing command. Try `%s help'", args[0]));
 }
 
-int main(string[] args)
+version(unittest) {} else
 {
-	version (unittest)
-	{
-		auto m = collectExceptionMsg(xedisk_main(args));
-		if (m)
-			stderr.writeln(m);
-		return 0;
-	}
-	else
+	int main(string[] args)
 	{
 		debug
 		{
@@ -881,10 +821,11 @@ int main(string[] args)
 	}
 }
 
+/+
 unittest
 {
 	auto res = captureConsole(main(["xedisk"]));
 	assert (res[0] == "");
 	assert (res[1] == "Missing command. Try `xedisk help'\n");
 	assert (!res[2]);
-}
+}+/

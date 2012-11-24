@@ -33,8 +33,7 @@ import xe.exception;
 
 version (unittest)
 {
-	import std.stdio;
-	import streamimpl;
+	import xe.test;
 }
 
 ///
@@ -311,9 +310,9 @@ private string maskToRegex(string mask)
 
 unittest
 {
+	mixin(Test!"maskToRegex (1)");
 	static assert (maskToRegex(r"*.*") == r"^.*\..*$");
 	static assert (maskToRegex(r"a?b.*") == r"^a.b\..*$");
-	writeln("maskToRegex (1) ok");
 }
 
 ///
@@ -347,8 +346,7 @@ class XeFileSystem
 	{
 		type = toUpper(type);
 		types_[type] = TypeDelegates(tryOpen, doCreate);
-		debug (RegisterFileSystemType)
-			writefln("Registered file system type %s", type);
+		debug writefln("Registered file system type %s", type);
 	}
 
 	///

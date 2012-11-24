@@ -1,6 +1,6 @@
 *.lst
 *.o
-doc/
+build/
 ddoc/*.html
 xedisk
 xedisk.exe

@@ -30,12 +30,10 @@ import xe.fs_impl.cache;
 import xe.bytemanip;
 import xe.streams;
 
-version (unittest)
+version(unittest)
 {
-	import std.stdio;
-	import streamimpl;
+	import xe.test;
 }
-	import std.stdio;
 
 private enum DirEntrySize = 23;
 
@@ -156,15 +154,14 @@ private struct Info
 
 unittest
 {
-	scope stream = new FileStream(File("testfiles/epi.atr"));
-	scope disk = XeDisk.open(stream);
+	mixin(Test!"Info (1)");
+	auto disk = new TestDisk("testfiles/epi.atr", 16, 512, 0);
 	scope cache = new SectorCache(disk);
 	auto info = Info(cache);
 	assert (info.getSectorSize() == 512);
 	assert (info.getClusterSize() == 512);
 	assert (info.getTotalClusters() == 720);
 	assert (info.getSectorsPerCluster() == 1);
-	writeln("Info (1) ok");
 }
 
 // allocate wherever you wish
@@ -366,8 +363,7 @@ private struct DirEntry
 
 unittest
 {
-	scope stream = new FileStream(File("testfiles/epi.atr"));
-	scope disk = XeDisk.open(stream);
+	auto disk = new TestDisk("testfiles/epi.atr", 16, 512, 0);
 	scope cache = new SectorCache(disk);
 	auto info = Info(cache);
 	auto rs = RawStream(ClusterMapIterator(cache, info.getRootDirMapFirstCluster()), 0);

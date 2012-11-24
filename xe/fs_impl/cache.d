@@ -37,8 +37,8 @@ import xe.disk;
 
 version(unittest)
 {
-	import std.stdio;
-	import streamimpl;
+	import xe.streams;
+	import xe.test;
 }
 
 private struct CachedSectorImpl
@@ -416,8 +416,8 @@ private:
 
 unittest
 {
-	scope stream = new MemoryStream(new ubyte[0]);
-	scope disk = XeDisk.create(stream, "ATR", 32, 256);
+	mixin(Test!"SectorCache (1)");
+	auto disk = new TestDisk(32, 256, 3);
 	{
 		scope cache = new SectorCache(disk, 2, false);
 		{
@@ -462,11 +462,12 @@ unittest
 		assert(buf[15] == 0x5b);
 		assert(buf[99] == 0x5b);
 	}
-	writeln("SectorCache (1) Ok");
 }
 
 unittest
 {
+	mixin(Test!"SectorCache (2)");
+
 	static struct SomeStruct
 	{
 		uint a;
@@ -479,8 +480,7 @@ unittest
 		void func();
 	}
 
-	scope stream = new MemoryStream(new ubyte[0]);
-	scope disk = XeDisk.create(stream, "ATR", 32, 256);
+	auto disk = new TestDisk(32, 256, 3);
 	{
 		scope cache = new SectorCache(disk, 2, false);
 		{
@@ -509,9 +509,9 @@ unittest
 			assert (csec1.a == 10);
 			assert (csec1.b == 20);
 			assert (csec1.c == 30);
-			// static assert (!__traits(compiles, csec1.func));
+			static assert (!__traits(compiles, csec1.func = 5));
+			static assert (!__traits(compiles, sink(csec1.func)));
 			static assert (!__traits(compiles, csec1.func()));
 		}
 	}
-	writeln("SectorCache (2) Ok");
 }

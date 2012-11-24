@@ -30,6 +30,11 @@ import std.conv;
 import xe.streams;
 import xe.exception;
 
+version(unittest)
+{
+	import xe.test;
+}
+
 ///
 enum XeDiskOpenMode
 {
@@ -82,7 +87,7 @@ class XeDisk
 	{
 		type = toUpper(type);
 		_types[type] = TypeDelegates(tryOpen, doCreate);
-		debug writefln("Registered disk format %s", type);
+		debug writefln("Registered disk type %s", type);
 	}
 
 	///
@@ -252,18 +257,14 @@ private:
 
 unittest
 {
-	import std.stdio;
-
+	mixin(Test!"XeDisk (1)");
 	assertThrown(XeDisk.create(null, "Nonexistent disk type", 0, 0));
-	writeln("XeDisk (1) ok");
 }
 
 unittest
 {
-	import std.stdio;
-
-//	scope stream = new FileStream(File("testfiles/MYDOS450.ATR"));
-	scope disk = new TestDisk("testfiles/MYDOS450.ATR", 16, 128, 3);
+	mixin(Test!"XeDisk (2)");
+	auto disk = new TestDisk("testfiles/MYDOS450.ATR", 16, 128, 3);
 	auto buf1 = new ubyte[1024];
 	auto buf2 = new ubyte[1024];
 	scope istr = disk.openBootLoader();
@@ -272,13 +273,11 @@ unittest
 	assert(128 == disk.readSector(2, buf2[128 .. 256]));
 	assert(128 == disk.readSector(3, buf2[256 .. 384]));
 	assert(buf1[0 .. 384] == buf2[0 .. 384]);
-	writeln("XeDisk (2) ok");
 }
 
 unittest
 {
-	import std.stdio;
-
+	mixin(Test!"XeDisk (3)");
 	auto foo = cast(immutable(ubyte)[]) "foo";
 	auto disk = new TestDisk(720, 128, 3);
 	auto ostr = disk.createBootLoader();
@@ -297,7 +296,6 @@ unittest
 	assert (buf[0 .. 3] == new ubyte[3]);
 	assert (buf[3 .. 6] == foo);
 	assert (buf[6 .. $] == new ubyte[122]);
-	writeln("XeDisk (3) ok");
 }
 
 class XePartition : XeDisk

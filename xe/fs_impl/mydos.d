@@ -39,8 +39,8 @@ import xe.streams;
 
 version (unittest)
 {
-	import std.stdio;
-	import streamimpl;
+	import std.file;
+	import xe.test;
 }
 
 private struct CachedEntry
@@ -83,8 +83,8 @@ private struct CachedEntry
 
 unittest
 {
-	scope stream = new MemoryStream(new ubyte[0]);
-	scope disk = XeDisk.create(stream, "ATR", 720, 256);
+	mixin(Test!"CachedEntry (1)");
+	auto disk = new TestDisk(720, 256, 3);
 	scope cache = new SectorCache(disk, 16, false);
 
 	auto sec4 = cache.alloc(4);
@@ -130,8 +130,6 @@ unittest
 	assert(ep2.firstSector == 0xbeef);
 	ep2.firstSector = 31337;
 	assert(ep2.firstSector == 31337);
-
-	writeln("CachedEntry (1) Ok");
 }
 
 private struct EntryRange
@@ -150,8 +148,8 @@ private struct EntryRange
 
 unittest
 {
-	scope stream = new FileStream(File("testfiles/MYDOS450.ATR"));
-	scope disk = XeDisk.open(stream);
+	mixin(Test!"EntryRange (1)");
+	auto disk = new TestDisk("testfiles/MYDOS450.ATR", 16, 128, 3);
 	scope cache = new SectorCache(disk, 16, false);
 
 	string[] names;
@@ -161,7 +159,6 @@ unittest
 			names ~= entry.name;
 	}
 	assert (names == [ "DOS     SYS", "DUP     SYS", "RAMBOOT M65", "RAMBOOT AUT", "RAMBOOT3M65", "RAMBOOT3AUT", "READ    ME " ]);
-	writeln("EntryRange (1) Ok");
 }
 
 private	enum EntryStatus : ubyte
@@ -364,8 +361,7 @@ class MydosRootDirectory : MydosDirectory
 
 unittest
 {
-	scope stream = new MemoryStream(new ubyte[0]);
-	scope disk = XeDisk.create(stream, "atr", 720, 256);
+	auto disk = new TestDisk(720, 256, 3);
 	scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "mydos");
 	assert (fs);
 	scope dir = fs.getRootDirectory();
@@ -416,8 +412,8 @@ class MydosSubDirectory : MydosDirectory
 
 unittest
 {
-	scope stream = new FileStream(File("testfiles/MYDOS450.ATR"));
-	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
+	mixin(Test!"MydosDirectory.doEnumerate (1)");
+	auto disk = new TestDisk("testfiles/MYDOS450.ATR", 16, 128, 3);
 	scope fs = XeFileSystem.open(disk);
 	assert (cast(MydosFileSystem) fs);
 	string[] names;
@@ -432,14 +428,12 @@ unittest
 		"ramboot3.aut",
 		"read.me"
 	]);
-
-	writeln("MydosDirectory.doEnumerate (1) ok");
 }
 
 unittest
 {
-	scope stream = new FileStream(File("testfiles/MYDIRS.ATR"));
-	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
+	mixin(Test!"MydosDirectory.doEnumerate (2)");
+	auto disk = new TestDisk("testfiles/MYDIRS.ATR", 16, 128, 3);
 	scope fs = XeFileSystem.open(disk);
 	assert (cast(MydosFileSystem) fs);
 	string[] names;
@@ -460,15 +454,12 @@ unittest
 		"/dir3/dir33",
 		"/dir4"
 	]);
-	writeln("MydosDirectory.doEnumerate (2) ok");
 }
 
 unittest
 {
-	import std.file;
-	auto arr = cast(ubyte[]) std.file.read("testfiles/MYDIRS.ATR");
-	scope stream = new MemoryStream(arr);
-	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadWrite);
+	mixin(Test!"MydosDirectory.remove (1)");
+	auto disk = new TestDisk("testfiles/MYDIRS.ATR", 16, 128, 3);
 	scope fs = cast(MydosFileSystem) XeFileSystem.open(disk);
 	assert (fs);
 	scope root = fs.getRootDirectory();
@@ -490,13 +481,12 @@ unittest
 	root.find("dir4").remove(true);
 	assert (fs.getFreeSectors() == 708);
 	assert (fs.getVtocFreeSectors() == 708);
-	writeln("MydosDirectory.remove (1) ok");
 }
 
 unittest
 {
-	scope stream = new MemoryStream(new ubyte[0]);
-	scope disk = XeDisk.create(stream, "atr", 720, 256);
+	mixin(Test!"MydosDirectory.createEntry (1)");
+	auto disk = new TestDisk(720, 256, 3);
 	scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "mydos");
 	assert (fs);
 	assert (fs.getFreeSectors() == 708);
@@ -549,13 +539,12 @@ unittest
 	assert (entry.sectors == 31);
 	assert (fs.getFreeSectors() == 600);
 	assert (fs.getVtocFreeSectors() == 600);
-	writeln("MydosDirectory.createEntry (1) ok");
 }
 
 unittest
 {
-	scope stream = new MemoryStream(new ubyte[0]);
-	scope disk = XeDisk.create(stream, "atr", 720, 256);
+	mixin(Test!"MydosDirectory.createDirectory (1)");
+	auto disk = new TestDisk(720, 256, 3);
 	scope fs = XeFileSystem.create(disk, "mydos");
 	assert (cast(MydosFileSystem) fs);
 	assert (fs.getFreeSectors() == 708);
@@ -573,7 +562,6 @@ unittest
 		++a;
 	assert (a == 0);
 	auto ent = fs.getRootDirectory().find("newdir");
-	writeln("MydosDirectory.createDirectory (1) ok");
 }
 
 private final class MydosFile : XeFile
@@ -626,15 +614,13 @@ private final class MydosFile : XeFile
 
 	unittest
 	{
-		auto stream = new FileStream(File("testfiles/MYDOS450.ATR"));
-		auto disk = XeDisk.open(stream);
-		auto fs = XeFileSystem.open(disk);
+		mixin(Test!"MydosFile.openReadOnly (1)");
+		auto disk = new TestDisk("testfiles/MYDOS450.ATR", 16, 128, 3);
+		scope fs = XeFileSystem.open(disk);
 		auto f = cast(XeFile) fs.getRootDirectory().find("ramboot3.m65");
 		assert (f !is null);
 		auto buf = new ubyte[8192];
 		assert (f.openReadOnly().read(buf) == 7111);
-		writeln("MydosFile.openReadOnly (1) Ok");
-
 	}
 
 	private class MydosFileOutputStream : OutputStream
@@ -705,8 +691,8 @@ private final class MydosFile : XeFile
 
 	unittest
 	{
-		scope stream = new MemoryStream(new ubyte[0]);
-		scope disk = XeDisk.create(stream, "ATR", 720, 256);
+		mixin(Test!"MydosFile.openWriteOnly (1)");
+		auto disk = new TestDisk(720, 256, 3);
 		scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "mydos");
 		{
 			scope fstream = cast(MydosFile.MydosFileOutputStream) fs.getRootDirectory().createFile("dupa");
@@ -760,13 +746,12 @@ private final class MydosFile : XeFile
 			assert (fstream.outer.getSectors() == (31337 + 252) / 253);
 			assert (fstream.outer.getSize() == 31337);
 		}
-		writeln ("MydosFile.openWriteOnly (1) ok");
 	}
 
 	unittest
 	{
-		scope stream = new MemoryStream(new ubyte[0]);
-		scope disk = XeDisk.create(stream, "ATR", 5000, 128);
+		mixin(Test!"MydosFile.openWriteOnly (2)");
+		auto disk = new TestDisk(5000, 128, 3);
 		scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "mydos");
 		scope fstream = cast(MydosFile.MydosFileOutputStream) fs.getRootDirectory().createFile("dupa");
 		assert (fstream);
@@ -778,7 +763,6 @@ private final class MydosFile : XeFile
 		assert (!fstream.outer.isReadOnly());
 		fstream.write(new ubyte[128 * 4000]);
 		assert (fstream.outer.getSize() == 128 * 4000);
-		writeln ("MydosFile.openWriteOnly (2) ok");
 	}
 
 	private static struct Range
@@ -885,11 +869,11 @@ class MydosFileSystem : XeFileSystem
 
 	unittest
 	{
+		mixin(Test!"MydosFileSystem.adjustName (1) ok");
 		MydosFileSystem nullfs = new MydosFileSystem();
 		assert (nullfs.adjustName("inVaL!).chrS") == "inval_.chr");
 		assert (nullfs.adjustName("this_name_is_.too_long") == "this_nam.too");
 		assert (nullfs.adjustName("0DIGITS") == "@0digits");
-		writeln("MydosFileSystem.adjustName (1) ok");
 	}
 
 	override void writeDosFiles(string dosVersion)
@@ -1030,18 +1014,17 @@ class MydosFileSystem : XeFileSystem
 
 unittest
 {
-	assert (MydosFileSystem.tryOpen(XeDisk.open(new FileStream(File("testfiles/DOS25.XFD")), XeDiskOpenMode.ReadOnly)) is null);
-	assert (cast(MydosFileSystem) MydosFileSystem.tryOpen(XeDisk.open(new FileStream(File("testfiles/MYDOS450.ATR")), XeDiskOpenMode.ReadOnly)) !is null);
-	assert (cast(MydosFileSystem) MydosFileSystem.tryOpen(XeDisk.open(new FileStream(File("testfiles/MYDOS453.ATR")), XeDiskOpenMode.ReadOnly)) !is null);
-
-	writeln("MydosFileSystem (1) ok");
+	mixin(Test!"MydosFileSystem (1)");
+	assert (MydosFileSystem.tryOpen(new TestDisk("testfiles/DOS25.XFD", 0, 128, 3)) is null);
+	assert (cast(MydosFileSystem) MydosFileSystem.tryOpen(new TestDisk("testfiles/MYDOS450.ATR", 16, 128, 3)) !is null);
+	assert (cast(MydosFileSystem) MydosFileSystem.tryOpen(new TestDisk("testfiles/MYDOS453.ATR", 16, 128, 3)) !is null);
 }
 
 unittest
 {
-	scope mstream = new MemoryStream(new ubyte[0]);
+	mixin(Test!"MydosFileSystem (2)");
 	{
-		scope disk = XeDisk.create(mstream, "ATR", 720, 256);
+		auto disk = new TestDisk(720, 256, 3);
 		scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "MYDOS");
 		assert (fs);
 		assert (fs.getFreeSectors() == 708);
@@ -1049,7 +1032,7 @@ unittest
 		assert (fs.getFreeBytes() == 708 * 253);
 	}
 	{
-		scope disk = XeDisk.create(mstream, "ATR", 31337, 256);
+		auto disk = new TestDisk(31337, 256, 3);
 		scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "MYDOS");
 		assert (fs !is null);
 		assert (fs.getFreeSectors() == 31310);
@@ -1061,7 +1044,7 @@ unittest
 		assert (vtocSizeFromVtocMark(fs._cache.request(360)[0], 256) == 16);
 	}
 	{
-		scope disk = XeDisk.create(mstream, "ATR", 31337, 128);
+		auto disk = new TestDisk(31337, 128, 3);
 		scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "MYDOS");
 		assert (fs !is null);
 		assert (fs.getFreeSectors() == 31294);
@@ -1072,27 +1055,26 @@ unittest
 		assert (!f);
 		assert (vtocSizeFromVtocMark(fs._cache.request(360)[0], 128) == 32);
 	}
-	writeln("MydosFileSystem (2) ok");
 }
 
 unittest
 {
-	scope stream = new MemoryStream(new ubyte[0]);
-	scope disk = XeDisk.create(stream, "ATR", 720, 256);
+	mixin(Test!"MydosFile read/write");
+	auto data = cast(ubyte[]) std.file.read("testfiles/DOS25.XFD");
+	auto disk = new TestDisk(720, 256, 3);
 	scope fs = cast(MydosFileSystem) XeFileSystem.create(disk, "mydos");
 	{
-	scope fstream = fs.getRootDirectory().createFile("DUP.SYS");
-	fstream.write(MydosFileSystem._dupSys450t);
+		scope fstream = fs.getRootDirectory().createFile("file1");
+		fstream.write(data);
 	}
 	{
-	auto buf = new ubyte[MydosFileSystem._dupSys450t.length + 1];
-	scope fstream = (cast(MydosFile) fs.getRootDirectory().find("DUP.SYS")).
-		openReadOnly();
-	auto r = fstream.read(buf);
-	assert (r == MydosFileSystem._dupSys450t.length);
-	assert (buf[0 .. r] == MydosFileSystem._dupSys450t);
+		auto buf = new ubyte[data.length + 1];
+		scope fstream = (cast(MydosFile) fs.getRootDirectory().find("file1")).
+			openReadOnly();
+		auto r = fstream.read(buf);
+		assert (r == data.length);
+		assert (buf[0 .. r] == data[]);
 	}
-	writeln ("MydosFile read/write ok");
 }
 
 int vtocSizeFromGeometry(int totalSectors, int bytesPerSector)
@@ -1105,6 +1087,7 @@ int vtocSizeFromGeometry(int totalSectors, int bytesPerSector)
 
 unittest
 {
+	mixin(Test!"vtocSizeFromGeometry (1)");
 	assert (vtocSizeFromGeometry(  721, 256) == 1);
 	assert (vtocSizeFromGeometry( 1440, 256) == 1);
 	assert (vtocSizeFromGeometry( 2880, 256) == 2);
@@ -1117,7 +1100,6 @@ unittest
 	assert (vtocSizeFromGeometry( 1440, 128) == 2);
 	assert (vtocSizeFromGeometry(32768, 128) == 34);
 	assert (vtocSizeFromGeometry(65535, 128) == 66);
-	writeln("vtocSizeFromGeometry (1) ok");
 }
 
 int vtocSizeFromVtocMark(ubyte mark, int bytesPerSector)
@@ -1137,13 +1119,13 @@ int vtocSizeFromVtocMark(ubyte mark, int bytesPerSector)
 
 unittest
 {
+	mixin(Test!"vtocSizeFromVtocMark (1)");
 	assert (vtocSizeFromVtocMark( 2, 256) == 1);
 	assert (vtocSizeFromVtocMark( 2, 128) == 1);
 	assert (vtocSizeFromVtocMark( 3, 256) == 1);
 	assert (vtocSizeFromVtocMark( 4, 256) == 2);
 	assert (vtocSizeFromVtocMark( 4, 128) == 4);
 	assert (vtocSizeFromVtocMark( 4, 512) == -1);
-	writeln("vtocSizeFromVtocMark (1) ok");
 }
 
 // compute VTOC mark (1st byte of sector 360)
@@ -1169,10 +1151,10 @@ body
 
 unittest
 {
+	mixin(Test!"vtocMarkFromGeometry (1)");
 	assert (vtocMarkFromGeometry( 720, 256) == 2);
 	assert (vtocMarkFromGeometry(1023, 256) == 2);
 	assert (vtocMarkFromGeometry(1024, 256) == 3);
 	assert (vtocMarkFromGeometry( 943, 128) == 2);  // (128 - 10) * 8 - 1
 	assert (vtocMarkFromGeometry( 944, 128) == 3);
-	writeln("vtocMarkFromGeometry (1) ok");
 }

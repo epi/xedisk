@@ -31,10 +31,9 @@ import xe.streams;
 
 private:
 
-version (unittest)
+version(unittest)
 {
-	import std.stdio;
-	import streamimpl;
+	import xe.test;
 }
 
 class MsdosPartition : XePartition
@@ -252,6 +251,7 @@ private:
 
 unittest
 {
+	mixin(Test!"MsdosPartitionTable (1)");
 	scope stream = new FileStream(File("testfiles/sda.mbr", "rb"));
 	scope pt = MsdosPartitionTable.tryOpen(stream);
 	assert(pt);
@@ -286,6 +286,4 @@ unittest
 	assert(part._entry.lbaFirst == 85938176);
 	assert(part._entry.sectors == 890832896);
 	assert(part._entry.type == 0x83);
-
-	writeln("MsdosPartitionTable (1) ok");
 }

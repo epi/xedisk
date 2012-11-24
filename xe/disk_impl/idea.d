@@ -31,10 +31,9 @@ import xe.streams;
 
 private:
 
-version (unittest)
+version(unittest)
 {
-	import std.stdio;
-	import streamimpl;
+	import xe.test;
 }
 
 class IdeaPartition : XePartition
@@ -276,6 +275,7 @@ private:
 
 unittest
 {
+	mixin(Test!"IdeaPartitionTable (1)");
 	scope stream = new FileStream(File("testfiles/sdc.mbr", "rb"));
 	scope pt = IdeaPartitionTable.tryOpen(stream);
 	assert(pt);
@@ -290,5 +290,4 @@ unittest
 	assert(part._pi.begin == 32768);
 	assert(part._pi.len == 65535);
 	assert(part._pi.clsize == PartitionSectorSize.B512);
-	writeln("IdeaPartitionTable (1) ok");
 }

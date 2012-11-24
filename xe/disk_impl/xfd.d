@@ -26,10 +26,9 @@ import std.typecons;
 import xe.disk;
 import xe.streams;
 
-version (unittest)
+version(unittest)
 {
-	import std.stdio;
-	import streamimpl;
+	import xe.test;
 }
 
 private:
@@ -128,6 +127,7 @@ private:
 
 unittest
 {
+	mixin(Test!"XfdDisk (1)");
 	scope stream = new FileStream(File("testfiles/DOS25.XFD"));
 	scope disk = cast(XfdDisk) XeDisk.open(stream, XeDiskOpenMode.ReadOnly);
 	assert (disk);
@@ -144,11 +144,11 @@ unittest
 	assert (disk.readSector(3, buf) == 128);
 	assert (disk.readSector(4, buf) == disk.getSectorSize(4));
 	assert (disk.readSector(720, buf) == disk.getSectorSize(720));
-	writeln("XfdDisk (1) ok");
 }
 
 unittest
 {
+	mixin(Test!"XfdDisk (2)");
 	enum Sectors = 720;
 	enum Size = Sectors * 128;
 
@@ -163,5 +163,4 @@ unittest
 	disk.setWriteProtected(false);
 	assertThrown(disk.setWriteProtected(true));
 	assert (!disk.isWriteProtected());
-	writeln("XfdDisk (2) ok");
 }
