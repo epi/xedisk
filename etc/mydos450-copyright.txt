@@ -1,0 +1,31 @@
+MyDOS 4.50 Copyright Notice
+
+        Copyright (C) 1988 by WORDMARK Systems and the authors:
+
+                          Charles Marslett
+                          2705 Pinewood Dr.
+                          Garland, TX 75042
+                              CIS: 73317,3662
+                              UseNet: CHASM@KILLER.DALLAS.TX.US
+
+                                   and
+
+                          Robert Puff
+                          Suite 222
+                          2117 Buffalo Rd.
+                          Rochester, NY 14624
+                              GEnie: BOB.PUFF
+
+     This software may be freely used and distributed provided that
+this copyright notice is left intact, and provided that:
+
+(1) The source code in machine readable form is provided with
+    any binary distribution, or made available at no additional cost
+    to the recipients of the binary distribution.
+
+(2) A binary version of a derivative work may be sold for a
+    reasonable distribution charge (less than $50), and the
+    source code in machine readable format must be available.
+
+(3) A derivative work may not impose and restriction on the free
+    distribution of the source code.
