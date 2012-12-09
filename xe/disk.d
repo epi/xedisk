@@ -87,7 +87,7 @@ class XeDisk
 	{
 		type = toUpper(type);
 		_types[type] = TypeDelegates(tryOpen, doCreate);
-		debug writefln("Registered disk type %s", type);
+		debug stderr.writefln("Registered disk type %s", type);
 	}
 
 	///
@@ -328,7 +328,7 @@ class XePartitionTable
 	{
 		type = toUpper(type);
 		_types[type] = TypeDelegates(tryOpen);
-		debug writefln("Registered partition table type %s", type);
+		debug stderr.writefln("Registered partition table type %s", type);
 	}
 
 	abstract ForwardRange!XePartition opSlice();

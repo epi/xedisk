@@ -346,7 +346,7 @@ class XeFileSystem
 	{
 		type = toUpper(type);
 		types_[type] = TypeDelegates(tryOpen, doCreate);
-		debug writefln("Registered file system type %s", type);
+		debug stderr.writefln("Registered file system type %s", type);
 	}
 
 	///
