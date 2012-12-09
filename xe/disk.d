@@ -369,104 +369,121 @@ import std.stdio;
 import xe.disk;
 import std.algorithm;
 
-class TestDisk : XeDisk
+private template TestImpl(string what)
+	if (what == "Disk" || what == "Partition")
 {
-	this(uint sectors, uint bytesPerSector, uint singleDensitySectors)
+	mixin("private alias Xe" ~ what ~ " BaseType;");
+
+	class TestImpl : BaseType
 	{
-		assert(sectors > 0);
-		assert(singleDensitySectors <= sectors);
-		_data = new ubyte[
-			(sectors - singleDensitySectors) * bytesPerSector
-			+ singleDensitySectors * 128];
-		_sectors = sectors;
-		_bytesPerSector = bytesPerSector;
-		_singleDensitySectors = singleDensitySectors;
-		_openMode = XeDiskOpenMode.ReadWrite;
+		this(uint sectors, uint bytesPerSector, uint singleDensitySectors)
+		{
+			assert(sectors > 0);
+			assert(singleDensitySectors <= sectors);
+			_data = new ubyte[
+				(sectors - singleDensitySectors) * bytesPerSector
+				+ singleDensitySectors * 128];
+			_sectors = sectors;
+			_bytesPerSector = bytesPerSector;
+			_singleDensitySectors = singleDensitySectors;
+			_openMode = XeDiskOpenMode.ReadWrite;
+		}
+
+		unittest
+		{
+			mixin(Test!("Test" ~ what ~ " (1)"));
+			auto d1 = new TestDisk(10, 256, 4);
+			assert(d1._data.length == 2048);
+			assert(d1._sectors == 10);
+			assert(d1._bytesPerSector == 256);
+			assert(d1._singleDensitySectors == 4);
+		}
+
+		/// Read contents of file from specified offset as a raw disk image
+		/// data interpreted according to the specified bytesPerSector and
+		/// singleDensitySectors parameters.
+		this(string filename, ulong offset, uint bytesPerSector,
+			uint singleDensitySectors)
+		{
+			auto f = File(filename);
+			f.seek(offset);
+			foreach (ubyte[] buf; f.byChunk(16384))
+				_data ~= buf;
+			assert(_data.length >= singleDensitySectors * 128);
+			assert((_data.length - singleDensitySectors * 128) % bytesPerSector == 0,
+				text((_data.length - singleDensitySectors * 128) % bytesPerSector));
+			_sectors = cast(uint) (singleDensitySectors +
+				(_data.length - singleDensitySectors * 128) / bytesPerSector);
+			_bytesPerSector = bytesPerSector;
+			_singleDensitySectors = singleDensitySectors;
+			_openMode = XeDiskOpenMode.ReadWrite;
+		}
+
+		unittest
+		{
+			mixin(Test!("Test" ~ what ~ " (2)"));
+			auto d1 = new TestDisk("testfiles/epi.atr", 16, 512, 0);
+			assert(d1._data.length == 720 * 512);
+			assert(d1._sectors == 720);
+			assert(d1._bytesPerSector == 512);
+			assert(d1._singleDensitySectors == 0);
+		}
+
+		override uint getSectors() { return _sectors; }
+
+		override uint getSectorSize(uint sector = 0)
+		{
+			return (sector == 0 || sector > _singleDensitySectors)
+				? _bytesPerSector : 128;
+		}
+
+		override bool isWriteProtected() { return false; }
+
+		override void setWriteProtected(bool value)
+		{
+			throw new Exception("Not implemented");
+		}
+
+		override string getType() const pure nothrow { return "TEST"; }
+
+		static if (what == "Partition")
+		{
+			override ulong getPhysicalSectors() { return _sectors; }
+			override ulong getFirstSector() { return 1; }
+		}
+
+	protected:
+		override size_t doReadSector(uint sector, ubyte[] buffer)
+		{
+			auto len = min(buffer.length, getSectorSize(sector));
+			auto pos = streamPosition(sector);
+			buffer[0 .. len] = _data[pos .. pos + len];
+			return len;
+		}
+
+		override void doWriteSector(uint sector, in ubyte[] buffer)
+		{
+			auto len = min(buffer.length, getSectorSize(sector));
+			auto pos = streamPosition(sector);
+			_data[pos .. pos + len] = buffer[0 .. len];
+		}
+
+	private:
+		uint streamPosition(uint sector)
+		{
+			if (sector > _singleDensitySectors)
+				return _singleDensitySectors * 128
+					+ (sector - _singleDensitySectors - 1) * _bytesPerSector;
+			else
+				return (sector - 1) * 128;
+		}
+
+		ubyte[] _data;
+		uint _sectors;
+		uint _bytesPerSector;
+		uint _singleDensitySectors;
 	}
-
-	unittest
-	{
-		auto d1 = new TestDisk(10, 256, 4);
-		assert(d1._data.length == 2048);
-		assert(d1._sectors == 10);
-		assert(d1._bytesPerSector == 256);
-		assert(d1._singleDensitySectors == 4);
-	}
-
-	/// Read contents of file from specified offset as a raw disk image
-	/// data interpreted according to the specified bytesPerSector and
-	/// singleDensitySectors parameters.
-	this(string filename, ulong offset, uint bytesPerSector,
-		uint singleDensitySectors)
-	{
-		auto f = File(filename);
-		f.seek(offset);
-		foreach (ubyte[] buf; f.byChunk(16384))
-			_data ~= buf;
-		assert(_data.length >= singleDensitySectors * 128);
-		assert((_data.length - singleDensitySectors * 128) % bytesPerSector == 0,
-			text((_data.length - singleDensitySectors * 128) % bytesPerSector));
-		_sectors = cast(uint) (singleDensitySectors +
-			(_data.length - singleDensitySectors * 128) / bytesPerSector);
-		_bytesPerSector = bytesPerSector;
-		_singleDensitySectors = singleDensitySectors;
-		_openMode = XeDiskOpenMode.ReadWrite;
-	}
-
-	unittest
-	{
-		auto d1 = new TestDisk("testfiles/epi.atr", 16, 512, 0);
-		assert(d1._data.length == 720 * 512);
-		assert(d1._sectors == 720);
-		assert(d1._bytesPerSector == 512);
-		assert(d1._singleDensitySectors == 0);
-	}
-
-	override uint getSectors() { return _sectors; }
-
-	override uint getSectorSize(uint sector = 0)
-	{
-		return (sector == 0 || sector > _singleDensitySectors)
-			? _bytesPerSector : 128;
-	}
-
-	override bool isWriteProtected() { return false; }
-
-	override void setWriteProtected(bool value)
-	{
-		throw new Exception("Not implemented");
-	}
-
-	override string getType() const pure nothrow { return "TEST"; }
-
-protected:
-	override size_t doReadSector(uint sector, ubyte[] buffer)
-	{
-		auto len = min(buffer.length, getSectorSize(sector));
-		auto pos = streamPosition(sector);
-		buffer[0 .. len] = _data[pos .. pos + len];
-		return len;
-	}
-
-	override void doWriteSector(uint sector, in ubyte[] buffer)
-	{
-		auto len = min(buffer.length, getSectorSize(sector));
-		auto pos = streamPosition(sector);
-		_data[pos .. pos + len] = buffer[0 .. len];
-	}
-
-private:
-	uint streamPosition(uint sector)
-	{
-		if (sector > _singleDensitySectors)
-			return _singleDensitySectors * 128
-				+ (sector - _singleDensitySectors - 1) * _bytesPerSector;
-		else
-			return (sector - 1) * 128;
-	}
-
-	ubyte[] _data;
-	uint _sectors;
-	uint _bytesPerSector;
-	uint _singleDensitySectors;
 }
+
+alias TestImpl!"Partition" TestPartition;
+alias TestImpl!"Disk" TestDisk;
