@@ -689,6 +689,34 @@ void dump(string[] args)
 	}
 }
 
+// xedisk cat image file...
+void cat(string[] args)
+{
+	uint partition;
+
+	getopt(args,
+		config.caseSensitive,
+		"p|partition", &partition);
+
+	enforce(args.length >= 3, "Missing image file name");
+	enforce(args.length >= 4, "Missing file name");
+
+	auto sh = openPartition(args[2], partition, OpenMode.ReadOnly);
+	sh.fs = XeFileSystem.open(sh.disk);
+	auto buf = new ubyte[4096];
+	foreach (fn; args[3 .. $])
+	{
+		auto fstream =
+			enforce(cast(XeFile)
+				enforce(sh.fs.getRootDirectory().find(fn),
+					format("File not found: `%s'", fn)),
+				format("`%s' is not a regular file", fn)).openReadOnly();
+		size_t s;
+		while ((s = fstream.read(buf)) > 0)
+			stdout.rawWrite(buf[0 .. s]);
+	}
+}
+
 void writeDos(string[] args)
 {
 	string dosVersion;
@@ -778,6 +806,7 @@ int xedisk_main(string[] args)
 			"extract":&extract,
 			"x":&extract,
 			"dump":&dump,
+			"cat":&cat,
 			"write-dos":&writeDos,
 			"list-partitions":&listPartitions,
 			"lp":&listPartitions,
