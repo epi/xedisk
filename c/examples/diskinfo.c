@@ -1,4 +1,5 @@
 #include <xe/disk.h>
+#include <xe/fs.h>
 
 #include <stdio.h>
 
@@ -22,7 +23,16 @@ int main(int argc, char** argv)
 		printf("%s: %d sectors * %d bytes\n",
 			XeDisk_GetType(pDisk),
 			XeDisk_GetSectors(pDisk),
-			XeDisk_GetSectorSize(pDisk)),
+			XeDisk_GetSectorSize(pDisk));
+		XeFileSystem* pFileSystem = XeFileSystem_Open(pDisk);
+		if (pFileSystem)
+		{
+			printf("File system: %s\n%d free sectors\n%lld free bytes\n",
+				XeFileSystem_GetType(pFileSystem),
+				XeFileSystem_GetFreeSectors(pFileSystem),
+				XeFileSystem_GetFreeBytes(pFileSystem));
+			XeFileSystem_Close(pFileSystem);
+		}
 		XeDisk_Close(pDisk);
 	}
 	XeDisk_Quit();

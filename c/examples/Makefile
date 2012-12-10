@@ -7,6 +7,7 @@ all: $(progs)
 
 $(libs):
 	( cd ../.. && $(MAKE) --no-print-directory BUILD=release c/examples/$@ )
+.PHONY: $(libs)
 
 % : %.c $(libs) $(headers)
 	gcc -Wall -O2 -I.. -o $@ $< -L. -lcxedisk -lphobos2 -lpthread -lrt -ldtoc

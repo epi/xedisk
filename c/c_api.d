@@ -5,8 +5,9 @@ import core.stdc.stdlib;
 
 import xe.streams;
 import xe.disk;
-import xe.fs_impl.all;
 import xe.disk_impl.all;
+import xe.fs;
+import xe.fs_impl.all;
 
 private string lastExceptionMsg;
 
@@ -23,6 +24,12 @@ private void setLastException(Exception e)
 private struct CXeDisk
 {
 	XeDisk impl;
+	string type;
+}
+
+private struct CXeFileSystem
+{
+	XeFileSystem impl;
 	string type;
 }
 
@@ -89,9 +96,7 @@ void XeDisk_Close(CXeDisk* cdisk)
 {
 	resetLastException();
 	try
-	{
 		GC.removeRoot(cdisk);
-	}
 	catch (Exception e)
 		setLastException(e);
 }
@@ -131,4 +136,67 @@ const(char)* XeDisk_GetType(CXeDisk* cdisk)
 	catch (Exception e)
 		setLastException(e);
 	return null;
+}
+
+export extern (C)
+CXeFileSystem* XeFileSystem_Open(CXeDisk* cdisk)
+{
+	resetLastException();
+	try
+	{
+		auto cfs = new CXeFileSystem;
+		cfs.impl = XeFileSystem.open(cdisk.impl);
+		GC.addRoot(cfs);
+		return cfs;
+	}
+	catch (Exception e)
+		setLastException(e);
+	return null;
+}
+
+export extern (C)
+void XeFileSystem_Close(CXeFileSystem* cfs)
+{
+	resetLastException();
+	try
+		GC.removeRoot(cfs);
+	catch (Exception e)
+		setLastException(e);
+}
+
+export extern (C)
+const(char)* XeFileSystem_GetType(CXeFileSystem* cfs)
+{
+	resetLastException();
+	try
+	{
+		if (!cfs.type)
+			cfs.type = cfs.impl.getType() ~ "\0";
+		return cfs.type.ptr;
+	}
+	catch (Exception e)
+		setLastException(e);
+	return null;
+}
+
+export extern (C)
+uint XeFileSystem_GetFreeSectors(CXeFileSystem* cfs)
+{
+	resetLastException();
+	try
+		return cfs.impl.getFreeSectors();
+	catch (Exception e)
+		setLastException(e);
+	return 0;
+}
+
+export extern (C)
+ulong XeFileSystem_GetFreeBytes(CXeFileSystem* cfs)
+{
+	resetLastException();
+	try
+		return cfs.impl.getFreeBytes();
+	catch (Exception e)
+		setLastException(e);
+	return 0;
 }

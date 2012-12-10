@@ -1,5 +1,5 @@
-#ifndef _XEDISK_H__
-#define _XEDISK_H__
+#ifndef _XEFILESYSTEM_H__
+#define _XEFILESYSTEM_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,12 +9,14 @@ extern "C" {
 
 typedef struct XeFileSystem XeFileSystem;
 
-XeFileSystem* XeFileSystem(XeDisk* pDisk);
-
-void XeFileSystem_close(XeFileSystem *pFS);
+XeFileSystem *XeFileSystem_Open(XeDisk *pDisk);
+void XeFileSystem_Close(XeFileSystem *pFS);
+const char *XeFileSystem_GetType(XeFileSystem *pFS);
+unsigned XeFileSystem_GetFreeSectors(XeFileSystem *pFS);
+unsigned long long XeFileSystem_GetFreeBytes(XeFileSystem *pFS);
 
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
-#endif /* _XEDISK_H__ */
+#endif /* _XEFILESYSTEM_H__ */
