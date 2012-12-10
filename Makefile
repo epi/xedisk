@@ -48,7 +48,7 @@ else
 		CC = dmc
 		RUN =
 	else
-		CC = cc
+		CC = gcc
 		RUN = ./
 	endif
 endif
@@ -83,15 +83,19 @@ builddir = $(BUILDDIR)/$(OS)/$(BUILD)
 
 # Set LIB, the ultimate target
 ifeq (,$(findstring win,$(OS)))
-	LIB_XEBASE = $(builddir)/libxebase.a
-	LIB_XEDISK = $(builddir)/libxedisk.a
-	EXE_XEDISK = $(builddir)/xedisk.exe
-	EXE_EFDISK = $(builddir)/efdisk.exe
+	LIB_XEBASE  := $(builddir)/libxebase.a
+	LIB_XEDISK  := $(builddir)/libxedisk.a
+	EXE_XEDISK  := $(builddir)/xedisk
+	EXE_EFDISK  := $(builddir)/efdisk
+	LIB_CXEDISK := $(builddir)/libcxedisk.a
+	LIB_DTOC    := $(builddir)/libdtoc.a
 else
-	LIB_XEBASE = $(builddir)/xebase.lib
-	LIB_XEDISK = $(builddir)/xedisk.lib
-	EXE_XEDISK = $(builddir)/xedisk
-	EXE_EFDISK = $(builddir)/efdisk
+	LIB_XEBASE  := $(builddir)/xebase.lib
+	LIB_XEDISK  := $(builddir)/xedisk.lib
+	EXE_XEDISK  := $(builddir)/xedisk.exe
+	EXE_EFDISK  := $(builddir)/efdisk.exe
+	LIB_CXEDISK := $(builddir)/cxedisk.lib
+	LIB_DTOC    := $(builddir)/dtoc.lib
 endif
 
 MARKDOWN = markdown
@@ -120,34 +124,55 @@ ifeq ($(BUILD),)
 # self-invocations. So the targets in this branch are accessible to
 # end users.
 release :
-	$(MAKE) --no-print-directory OS=$(OS) BUILD=release
+	@$(MAKE) --no-print-directory OS=$(OS) BUILD=release
 debug :
-	$(MAKE) --no-print-directory OS=$(OS) BUILD=debug
+	@$(MAKE) --no-print-directory OS=$(OS) BUILD=debug
 unittest :
-	$(MAKE) --no-print-directory OS=$(OS) BUILD=debug unittest
-	$(MAKE) --no-print-directory OS=$(OS) BUILD=release unittest
+	@$(MAKE) --no-print-directory OS=$(OS) BUILD=debug unittest
+	@$(MAKE) --no-print-directory OS=$(OS) BUILD=release unittest
 else
 # This branch is normally taken in recursive builds. All we need to do
 # is set the default build to $(BUILD) (which is either debug or
 # release) and then let the unittest depend on that build's unittests.
-$(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(EXE_XEDISK) $(EXE_EFDISK)
-unittest : $(addsuffix $(DOTEXE),$(addprefix $(builddir)/unittest/,$(TEST_MODULES)))
+$(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(LIB_CXEDISK) $(LIB_DTOC) $(EXE_XEDISK) $(EXE_EFDISK)
+unittest : $(addsuffix $(DOTEXE),$(addprefix $(builddir)/unittest/,$(TEST_MODULES))) $(builddir)/unittest/c/test$(DOTEXE)
 endif
 
 $(EXE_XEDISK): $(src_exe_xedisk) $(LIB_XEBASE) $(LIB_XEDISK)
-	$(DMD) $(DFLAGS) -of$@ $(src_exe_xedisk) $(LIB_XEDISK) $(LIB_XEBASE)
+	@echo " DMD  $@"
+	@$(DMD) $(DFLAGS) -of$@ $(src_exe_xedisk) $(LIB_XEDISK) $(LIB_XEBASE)
 
 $(EXE_EFDISK): $(src_exe_efdisk) $(LIB_XEBASE)
-	$(DMD) $(DFLAGS) -of$@ $(src_exe_efdisk) $(LIB_XEBASE)
+	@echo " DMD  $@"
+	@$(DMD) $(DFLAGS) -of$@ $(src_exe_efdisk) $(LIB_XEBASE)
 
 $(LIB_XEBASE): $(src_lib_xebase)
-	$(DMD) $(DFLAGS) -lib -of$@ $(src_lib_xebase)
+	@echo " DMD  $@"
+	@$(DMD) $(DFLAGS) -lib -of$@ $(src_lib_xebase)
 
 $(LIB_XEDISK): $(src_lib_xedisk) $(src_lib_xebase)
-	$(DMD) $(DFLAGS) -lib -of$@ $(src_lib_xedisk)
+	@echo " DMD  $@"
+	@$(DMD) $(DFLAGS) -lib -of$@ $(src_lib_xedisk)
+
+$(LIB_CXEDISK): c/c_api.d $(builddir)/c/c_init.o $(src_lib_xedisk) $(src_lib_xebase)
+	@echo " DMD  $@"
+	@$(DMD) $(DFLAGS) -lib -of$@ $^
+
+$(LIB_DTOC): $(builddir)/emptymain.d
+	@echo " DMD  $@"
+	@$(DMD) $(DFLAGS) -lib -of$@ $^
+
+c/examples/libcxedisk.a: $(LIB_CXEDISK)
+	@echo " CP   $@"
+	@cp $< $@
+
+c/examples/libdtoc.a: $(LIB_DTOC)
+	@echo " CP   $@"
+	@cp $< $@
 
 $(builddir)/%.o : %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	@echo " CC   $@"
+	@mkdir -p `dirname "$@"` && $(CC) $(CFLAGS) -c $< -o $@
 
 $(builddir)/%.a : %.o
 	$(AR) rc $@ $<
