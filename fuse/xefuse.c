@@ -140,8 +140,6 @@ static int XeFuse_open(const char *path, struct fuse_file_info *fi)
 		goto cleanup_entry;
 	}
 
-	// ...
-
 cleanup_entry:
 	XeEntry_Free(pEntry);
 cleanup_root:
@@ -159,7 +157,6 @@ static int XeFuse_read(const char *path, char *buf, size_t size, off_t offset,
 	XeInputStream *pStream = NULL;
 	size_t pos;
 	(void) fi;
-	fprintf(stderr, "%s, %p, %d, %d\n", path, buf, (int) size, (int) offset);
 	pRootDir = XeFileSystem_GetRootDirectory(pFileSystem);
 	if (!pRootDir)
 		return -ENOENT;
@@ -217,17 +214,6 @@ cleanup_entry:
 cleanup_root:
 	XeDirectory_Free(pRootDir);
 	return result;
-
-	
-/*    len = strlen(XeFuse_str);
-    if (offset < len) {
-        if (offset + size > len)
-            size = len - offset;
-        memcpy(buf, XeFuse_str + offset, size);
-    } else
-        size = 0;
-
-    return size;*/
 }
 
 static struct fuse_operations XeFuse_oper =
@@ -238,7 +224,7 @@ static struct fuse_operations XeFuse_oper =
 	.read	= XeFuse_read,
 };
 
-void printUsage(const char *progName)
+static void printUsage(const char *progName)
 {
 	fprintf(stderr,
 		"Usage: %s image_name mountpoint [options]\n\n"
@@ -287,12 +273,12 @@ int main(int argc, char **argv)
 			return 2;
 		}
 	}
-	fuseargv[fuseargc++] = "-s";
 	if (!filename || !mountpoint)
 	{
 		printUsage(argv[0]);
 		return 2;
 	}
+	fuseargv[fuseargc++] = "-s";
 
 	XeDisk_Init();
 	pDisk = XeDisk_OpenFile(filename, XeDiskOpenMode_ReadOnly);
