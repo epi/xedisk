@@ -89,6 +89,7 @@ ifeq (,$(findstring win,$(OS)))
 	EXE_EFDISK  := $(builddir)/efdisk
 	LIB_CXEDISK := $(builddir)/libcxedisk.a
 	LIB_DTOC    := $(builddir)/libdtoc.a
+	EXE_XEFUSE  := $(builddir)/xefuse
 else
 	LIB_XEBASE  := $(builddir)/xebase.lib
 	LIB_XEDISK  := $(builddir)/xedisk.lib
@@ -134,7 +135,7 @@ else
 # This branch is normally taken in recursive builds. All we need to do
 # is set the default build to $(BUILD) (which is either debug or
 # release) and then let the unittest depend on that build's unittests.
-$(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(LIB_CXEDISK) $(LIB_DTOC) $(EXE_XEDISK) $(EXE_EFDISK)
+$(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(LIB_CXEDISK) $(LIB_DTOC) $(EXE_XEDISK) $(EXE_EFDISK) $(EXE_XEFUSE)
 unittest : $(addsuffix $(DOTEXE),$(addprefix $(builddir)/unittest/,$(TEST_MODULES))) $(builddir)/unittest/c/test$(DOTEXE)
 endif
 
@@ -161,6 +162,12 @@ $(LIB_CXEDISK): c/c_api.d $(builddir)/c/c_init.o $(src_lib_xedisk) $(src_lib_xeb
 $(LIB_DTOC): $(builddir)/emptymain.d
 	@echo " DMD  $@"
 	@$(DMD) $(DFLAGS) -lib -of$@ $^
+
+ifneq ($(EXE_XEFUSE),)
+$(EXE_XEFUSE): fuse/xefuse.c $(LIB_CXEDISK) $(LIB_DTOC) c/xe/stream.h c/xe/disk.h c/xe/fs.h
+	@echo " CC   $@"
+	@$(CC) $(CFLAGS) -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=22 -Ic fuse/xefuse.c -o $@ -L$(builddir) -lfuse -lcxedisk -lphobos2 -lpthread -lrt -ldtoc
+endif
 
 c/examples/libcxedisk.a: $(LIB_CXEDISK)
 	@echo " CP   $@"
