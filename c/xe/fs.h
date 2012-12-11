@@ -1,9 +1,12 @@
-#ifndef _XEFILESYSTEM_H__
-#define _XEFILESYSTEM_H__
+#ifndef _XE_FS_H__
+#define _XE_FS_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <xe/disk.h>
+#include <xe/stream.h>
 
 #include <time.h>
 
@@ -11,9 +14,6 @@ typedef struct XeFileSystem XeFileSystem;
 typedef struct XeEntry XeEntry;
 typedef struct XeDirectory XeDirectory;
 typedef struct XeFile XeFile;
-
-typedef struct XeDisk XeDisk;
-typedef struct XeInputStream XeInputStream;
 
 /** Creates a new XeFileSystem object which must be freed using
  *  XeFileSystem_Free() when done.
@@ -70,4 +70,4 @@ XeInputStream *XeFile_OpenReadOnly(XeFile *pFile);
 } // extern "C"
 #endif
 
-#endif /* _XEFILESYSTEM_H__ */
+#endif /* _XE_FS_H__ */

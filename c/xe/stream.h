@@ -1,9 +1,11 @@
-#ifndef _XESTREAM_H__
-#define _XESTREAM_H__
+#ifndef _XE_STREAM_H__
+#define _XE_STREAM_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <stdlib.h>
 
 typedef struct XeInputStream XeInputStream;
 

@@ -1,5 +1,5 @@
-#ifndef _XEDISK_H__
-#define _XEDISK_H__
+#ifndef _XE_DISK_H__
+#define _XE_DISK_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,4 +44,4 @@ const char *XeDisk_GetType(XeDisk* pDisk);
 } // extern "C"
 #endif
 
-#endif /* _XEDISK_H__ */
+#endif /* _XE_DISK_H__ */
