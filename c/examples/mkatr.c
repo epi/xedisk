@@ -34,7 +34,7 @@ int main(int argc, char** argv)
 			XeDisk_GetType(pDisk),
 			XeDisk_GetSectors(pDisk),
 			XeDisk_GetSectorSize(pDisk)),
-		XeDisk_Close(pDisk);
+		XeDisk_Free(pDisk);
 	}
 	XeDisk_Quit();
 	return 0;

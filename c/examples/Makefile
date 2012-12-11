@@ -1,6 +1,6 @@
 progs   := diskinfo mkatr
 libs    := libcxedisk.a libdtoc.a
-headers := ../xe/disk.h ../xe/fs.h
+headers := ../xe/disk.h ../xe/fs.h ../xe/stream.h
 
 all: $(progs)
 .PHONY: all

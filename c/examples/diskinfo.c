@@ -31,9 +31,9 @@ int main(int argc, char** argv)
 				XeFileSystem_GetType(pFileSystem),
 				XeFileSystem_GetFreeSectors(pFileSystem),
 				XeFileSystem_GetFreeBytes(pFileSystem));
-			XeFileSystem_Close(pFileSystem);
+			XeFileSystem_Free(pFileSystem);
 		}
-		XeDisk_Close(pDisk);
+		XeDisk_Free(pDisk);
 	}
 	XeDisk_Quit();
 	return 0;
