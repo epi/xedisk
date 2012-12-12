@@ -106,6 +106,8 @@ private:
 			return null;
 		uint totalSectors;
 		uint singleDensitySectors;
+		enforce(size >= 384 && size <= 512 * 65535,
+			"Invalid ATR data size");
 		if (bytesPerSector > 128 && size % bytesPerSector == 128)
 		{
 			totalSectors = (size + 3 * (bytesPerSector - 128)) / bytesPerSector;
@@ -115,6 +117,15 @@ private:
 		{
 			totalSectors = size / bytesPerSector;
 			singleDensitySectors = 0;
+		}
+		else
+		{
+			// Wrong ATR data size, just assume the more common format
+			// with 3 128-byte sectors.
+			totalSectors = (size + 3 * (bytesPerSector - 128)) / bytesPerSector;
+			singleDensitySectors = 3;
+			// ...but open it read only to avoid data corruption.
+			mode = XeDiskOpenMode.ReadOnly;
 		}
 		bool writeProtected = header[15] & 1;
 		return new AtrDisk(s, totalSectors, singleDensitySectors,
@@ -132,6 +143,8 @@ private:
 		default:       throw new Exception(
 			"Sector size must be 128, 256 or 512 bytes");
 		}
+		enforce(totalSectors >= 3 && totalSectors <= 65535,
+			"Number of sectors in an ATR disk image must be from 3 to 65535");
 		uint size = ((totalSectors - singleDensitySectors) * bytesPerSector
 			+ singleDensitySectors * 128) / Paragraph;
 		s.write(0, makeHeader(totalSectors, bytesPerSector));
