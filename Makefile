@@ -136,7 +136,7 @@ else
 # is set the default build to $(BUILD) (which is either debug or
 # release) and then let the unittest depend on that build's unittests.
 $(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(LIB_CXEDISK) $(LIB_DTOC) $(EXE_XEDISK) $(EXE_EFDISK) $(EXE_XEFUSE)
-unittest : $(addsuffix $(DOTEXE),$(addprefix $(builddir)/unittest/,$(TEST_MODULES))) $(builddir)/unittest/c/test$(DOTEXE)
+unittest : $(addsuffix $(DOTEXE),$(addprefix $(builddir)/unittest/,$(TEST_MODULES)))
 endif
 
 $(EXE_XEDISK): $(src_exe_xedisk) $(LIB_XEBASE) $(LIB_XEDISK)
