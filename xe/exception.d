@@ -21,10 +21,12 @@ along with xedisk.  If not, see <http://www.gnu.org/licenses/>.
 module xe.exception;
 
 import std.string;
+import std.conv;
 
 class XeException : Exception
 {
-	this(string msg, uint errorCode = 0, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	this(string msg, uint errorCode = 0, string file = __FILE__,
+		size_t line = __LINE__, Throwable next = null)
 	{
 		super(msg, file, line, next);
 		_errorCode = errorCode;
@@ -41,4 +43,18 @@ class XeException : Exception
 	}
 
 	private uint _errorCode;
+}
+
+string CTFEGenerateExceptionClass(string name, uint errorCode = 0,
+	string defaultString = "")
+{
+	return r"
+class " ~ name ~ " : XeException
+{
+	this(string msg" ~ (defaultString.length
+		? " = \"" ~ defaultString ~ "\""
+		: "") ~ ", string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(msg, " ~ to!string(errorCode) ~ ", file, line, next);
+	}}";
 }
