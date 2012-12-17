@@ -106,6 +106,7 @@ struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == st
 		else static if (en == Endian.bigEndian)
 			_impl._data[index .. index + T.sizeof] = ntobe(val);
 		else static assert(false);
+		_impl._dirty = true;
 	}
 
 	pure nothrow @property auto sector() const { assert (_impl); return _impl._sector; }
@@ -416,6 +417,7 @@ private:
 
 unittest
 {
+	import std.range;
 	mixin(Test!"SectorCache (1)");
 	auto disk = new TestDisk(32, 256, 3);
 	{
@@ -438,7 +440,7 @@ unittest
 		}
 		{
 			cache.dump();
-			auto csec1a = cache.request(22);
+			auto csec1a = cache.alloc(22);
 			auto csec1b = cache.request(22);
 			cache.dump();
 			assert (csec1a == csec1b);
@@ -448,10 +450,15 @@ unittest
 			cache.dump();
 			assert (csec1c[15] == 0xde);
 			assert (csec1c[17] == 0xad);
-			cache.request(23)[] = 0x5b;
+			cache.alloc(23)[] = 0x5b;
+			cache.alloc(24)[] = 0x5c;
+			cache.alloc(25)[] = 0x5d;
+			assert(equal(cache.request(23)[], repeat(0x5b, 256)));
+			assert(equal(cache.request(24)[], repeat(0x5c, 256)));
+			assert(equal(cache.request(25)[], repeat(0x5d, 256)));
 		}
-		// implicit flush();
 		cache.dump();
+		// implicit flush();
 	}
 	{
 		ubyte[256] buf;
@@ -459,8 +466,11 @@ unittest
 		assert(buf[15] == 0xde);
 		assert(buf[17] == 0xad);
 		disk.readSector(23, buf);
-		assert(buf[15] == 0x5b);
-		assert(buf[99] == 0x5b);
+		assert(equal(buf[], repeat(0x5b, buf.length)));
+		disk.readSector(24, buf);
+		assert(equal(buf[], repeat(0x5c, buf.length)));
+		disk.readSector(25, buf);
+		assert(equal(buf[], repeat(0x5d, buf.length)));
 	}
 }
 
@@ -485,7 +495,9 @@ unittest
 		scope cache = new SectorCache(disk, 2, false);
 		{
 			auto csec1 = cache.request(19).as!SomeStruct;
+			assert(!csec1._impl._dirty);
 			csec1.a = 0xdeadbeef;
+			assert(csec1._impl._dirty);
 			csec1.b = -31337;
 			csec1.c = cast(ushort) 0xcafe;
 			csec1.d = cast(ubyte[]) [ 0xaa, 0xbb, 0xcc ];
