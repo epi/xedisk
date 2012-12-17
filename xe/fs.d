@@ -36,6 +36,21 @@ version (unittest)
 	import xe.test;
 }
 
+mixin(CTFEGenerateExceptionClass("UnrecognizedDiskFormatException", 148,
+	"Unrecognized disk format"));
+mixin(CTFEGenerateExceptionClass("PathNotFoundException", 150,
+	"Path not found"));
+mixin(CTFEGenerateExceptionClass("FileExistsException", 151,
+	"Invalid attempt to overwrite an existing file or directory"));
+mixin(CTFEGenerateExceptionClass("DiskFullException", 162,
+	"Disk full"));
+mixin(CTFEGenerateExceptionClass("InvalidFileNameException", 165,
+	"Invalid file name"));
+mixin(CTFEGenerateExceptionClass("DirectoryFullException", 169,
+	"Directory full"));
+mixin(CTFEGenerateExceptionClass("FileNotFoundException", 170,
+	"File not found"));
+
 ///
 class XeEntry
 {
@@ -336,7 +351,7 @@ class XeFileSystem
 			if (fs !is null)
 				return fs;
 		}
-		throw new XeException("Could not recognize file system type", 148);
+		throw new UnrecognizedDiskFormatException();
 	}
 
 	protected static void registerType(
@@ -374,11 +389,11 @@ class XeFileSystem
 	/// Returns: range that can be iterated over using foreach.
 	final auto listDirectory(string path, string mask)
 	{
-		auto ent = getRootDirectory().find(path);
-		if (!ent)
-			throw new XeException(format("Directory `%s' not found", path), 150);
-		if (!ent.isDirectory())
-			throw new XeException(format("`%s' is not a directory", path), 150);
+		auto ent = enforceEx!PathNotFoundException(
+			getRootDirectory().find(path),
+			format("Directory `%s' not found", path));
+		enforceEx!PathNotFoundException(ent.isDirectory(),
+			format("`%s' is not a directory", path));
 
 		static struct Iterator
 		{
