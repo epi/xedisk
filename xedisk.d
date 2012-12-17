@@ -664,6 +664,21 @@ void extract(string[] args)
 	}
 }
 
+void createDir(string[] args)
+{
+	uint partition;
+
+	getopt(args,
+		config.caseSensitive,
+		"p|partition", &partition);
+
+	enforce(args.length >= 4, "Missing directory name");
+
+	auto sh = openPartition(args[2], partition, OpenMode.ReadWrite);
+	sh.fs = XeFileSystem.open(sh.disk);
+	sh.fs.getRootDirectory().createDirectory(args[3]);
+}
+
 // xedisk dump image [sector_range]
 void dump(string[] args)
 {
@@ -805,6 +820,8 @@ int xedisk_main(string[] args)
 			"a":&add,
 			"extract":&extract,
 			"x":&extract,
+			"mkdir":&createDir,
+			"md":&createDir,
 			"dump":&dump,
 			"cat":&cat,
 			"write-dos":&writeDos,
