@@ -529,7 +529,7 @@ void add(string[] args)
 		}
 doIt:
 		auto newDir = (existing && existing.isDirectory()) ?
-			cast(XeDirectory) existing : dest.createDirectory(name.baseName());
+			cast(XeDirectory) existing : dest.createDirectory(bn);
 		foreach (DirEntry e; dirEntries(name, SpanMode.shallow))
 		{
 			if (e.isDir)
