@@ -1,0 +1,175 @@
+<?xml version="1.0"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+	xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+	<!-- based on win32/setup/fail.wxs from FAIL (http://fail.sf.net/) -->
+
+	<?define WIN64=no?>
+	<?define PLATFORM_SUFFIX=""?>
+	<?define UPGRADE_GUID=3BB6A4BE-495A-11E2-80E2-D1376288709B?>
+	<?define PROGRAM_FILES_FOLDER=ProgramFilesFolder?>
+	<?define SRC_DIR=""?>
+
+	<Product Id="*" Name="xedisk $(var.VERSION)" Language="1033"
+		Version="$(var.VERSION)" Manufacturer="Adrian Matoga" UpgradeCode="$(var.UPGRADE_GUID)">
+
+		<Package Description="xedisk - Atari XL/XE Disk Image Utility" Manufacturer="Adrian Matoga"
+			InstallerVersion="200" Platform="$(sys.BUILDARCH)" Compressed="yes" />
+		<MajorUpgrade DowngradeErrorMessage="Newer version of xedisk is already installed!" MigrateFeatures="yes" />
+		<Media Id="1" Cabinet="xedisk.cab" EmbedCab="yes" CompressionLevel="high" />
+
+		<Property Id="ARPHELPLINK" Value="https://github.com/epi/xedisk" />
+		<WixVariable Id="WixUILicenseRtf" Value="setup/license.rtf" />
+
+		<UI Id="MyWixUI_FeatureTree">
+			<!-- customized WixUI_FeatureTree from Wix 3.0 - my changes commented -->
+			<TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+			<TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+			<TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+
+			<Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+			<Property Id="WixUI_Mode" Value="FeatureTree" />
+
+			<DialogRef Id="ErrorDlg" />
+			<DialogRef Id="FatalError" />
+			<DialogRef Id="FilesInUse" />
+			<DialogRef Id="MsiRMFilesInUse" />
+			<DialogRef Id="PrepareDlg" />
+			<DialogRef Id="ProgressDlg" />
+			<DialogRef Id="ResumeDlg" />
+			<DialogRef Id="UserExit" />
+
+			<Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
+
+			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="MyLicenseAgreementDlg">1</Publish>
+
+			<Publish Dialog="MyLicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
+			<Publish Dialog="MyLicenseAgreementDlg" Control="Next" Event="NewDialog" Value="MyCustomizeDlg">1</Publish>
+
+			<Publish Dialog="MyCustomizeDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="1">Installed</Publish>
+			<Publish Dialog="MyCustomizeDlg" Control="Back" Event="NewDialog" Value="MyLicenseAgreementDlg" Order="2">NOT Installed</Publish>
+			<Publish Dialog="MyCustomizeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+
+			<Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MyCustomizeDlg" Order="1">NOT Installed OR WixUI_InstallMode = "Change"</Publish>
+			<Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2">Installed</Publish>
+
+			<Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg">1</Publish>
+
+			<Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton" Event="NewDialog" Value="MyCustomizeDlg">1</Publish>
+			<Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+			<Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+			<Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg">1</Publish>
+
+			<Dialog Id="MyLicenseAgreementDlg" Width="370" Height="270" Title="!(loc.LicenseAgreementDlg_Title)">
+				<!-- removed the checkbox and replaced the "Next" button with "I Accept" -->
+				<Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="I &amp;Accept">
+					<!-- http://www.joyofsetup.com/2010/05/20/its-time-to-experiment/
+					<Publish Event="SpawnWaitDialog" Value="WaitForCostingDlg">CostingComplete = 1</Publish>
+					-->
+				</Control>
+				<Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+				<Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+				</Control>
+				<Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.LicenseAgreementDlgBannerBitmap)" />
+				<!-- higher license box because of the removed checkbox -->
+				<Control Id="LicenseText" Type="ScrollableText" X="20" Y="60" Width="330" Height="155" Sunken="yes" TabSkip="no">
+					<Text SourceFile="!(wix.WixUILicenseRtf)" />
+				</Control>
+				<!-- removed the "Print" button -->
+				<Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+				<Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+				<Control Id="Description" Type="Text" X="25" Y="23" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.LicenseAgreementDlgDescription)" />
+				<Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.LicenseAgreementDlgTitle)" />
+			</Dialog>
+
+			<Dialog Id="MyCustomizeDlg" Width="370" Height="270" Title="!(loc.CustomizeDlg_Title)" TrackDiskSpace="yes">
+				<!-- wider and higher selection tree so it doesn't need scrollbars -->
+				<Control Id="Tree" Type="SelectionTree" X="10" Y="75" Width="190" Height="125" Property="_BrowseProperty" Sunken="yes" TabSkip="no" Text="!(loc.CustomizeDlgTree)" />
+				<Control Id="Browse" Type="PushButton" X="294" Y="210" Width="66" Height="17" Text="!(loc.CustomizeDlgBrowse)">
+					<Publish Event="SelectionBrowse" Value="BrowseDlg">1</Publish>
+					<Condition Action="hide">Installed</Condition>
+					<Condition Action="disable">Installed</Condition>
+				</Control>
+				<!-- removed the "Reset" and "Disk Cost" buttons, moved the "Back" and "Next" buttons to their position in other dialogs -->
+				<Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+				<Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)">
+					<Subscribe Event="SelectionNoItems" Attribute="Enabled" />
+				</Control>
+				<Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+				</Control>
+				<Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.CustomizeDlgBannerBitmap)" />
+				<Control Id="Text" Type="Text" X="25" Y="55" Width="320" Height="20" Text="!(loc.CustomizeDlgText)" />
+				<Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+				<Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+				<Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.CustomizeDlgDescription)" />
+				<Control Id="Title" Type="Text" X="15" Y="6" Width="210" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.CustomizeDlgTitle)" />
+				<Control Id="Box" Type="GroupBox" X="210" Y="71" Width="150" Height="128" />
+				<Control Id="ItemDescription" Type="Text" X="215" Y="90" Width="131" Height="50" Text="!(loc.CustomizeDlgItemDescription)">
+					<Subscribe Event="SelectionDescription" Attribute="Text" />
+				</Control>
+				<Control Id="ItemSize" Type="Text" X="215" Y="140" Width="131" Height="50" Text="!(loc.CustomizeDlgItemSize)">
+					<Subscribe Event="SelectionSize" Attribute="Text" />
+				</Control>
+				<Control Id="Location" Type="Text" X="90" Y="210" Width="200" Height="20" Text="!(loc.CustomizeDlgLocation)">
+					<Subscribe Event="SelectionPath" Attribute="Text" />
+					<Subscribe Event="SelectionPathOn" Attribute="Visible" />
+					<Condition Action="hide">Installed</Condition>
+				</Control>
+				<Control Id="LocationLabel" Type="Text" X="25" Y="210" Width="65" Height="10" Text="!(loc.CustomizeDlgLocationLabel)">
+					<Subscribe Event="SelectionPathOn" Attribute="Visible" />
+					<Condition Action="hide">Installed</Condition>
+				</Control>
+			</Dialog>
+		</UI>
+		<UIRef Id="WixUI_Common" />
+
+		<Directory Id="TARGETDIR" Name="SourceDir">
+			<Directory Id="$(var.PROGRAM_FILES_FOLDER)">
+				<Directory Id="XEDISK.DIR" Name="xedisk">
+					<Component Id="xedisk.exe" Guid="*">
+						<File Id="xedisk.exe" Name="xedisk.exe" Source="build/release/xedisk.exe" Checksum="yes" KeyPath="yes" />
+					</Component>
+					<Component Id="path" Guid="34FECE7A-495B-11E2-B40C-FB386288709B">
+						<Environment Id="path" Action="set" Name="Path" Part="last" Permanent="no" System="yes" Value="[XEDISK.DIR]" />
+						<CreateFolder />
+					</Component>
+					<Component Id="xedisk_manual.html" Guid="*">
+						<File Id="xedisk_manual.html" Name="xedisk_manual.html" Source="xedisk_manual.html" KeyPath="yes" />
+					</Component>
+				</Directory>
+			</Directory>
+
+			<Directory Id="ProgramMenuFolder" Name="Programs">
+				<Directory Id="menu.dir" Name="xedisk">
+					<Component Id="Documentation.lnk" Guid="*">
+						<RemoveFolder Id="menu.dir" On="uninstall" />
+						<RegistryValue Root="HKCU" Key="Software\xedisk" Name="ProgramsMenuDoc" Type="integer" Value="1" KeyPath="yes" />
+						<Shortcut Id="Documentation.lnk" Name="Documentation" Target="[#xedisk_manual.html]" />
+					</Component>
+					<Component Id="Website.url" Guid="FAF00A74-495E-11E2-B6F1-B0446288709B">
+						<RegistryValue Root="HKCU" Key="Software\xedisk" Name="ProgramsMenuWebsite" Type="integer" Value="1" KeyPath="yes" />
+						<File Id="Website.url" Name="Website.url" Source="setup/Website.url" />
+					</Component>
+				</Directory>
+			</Directory>
+		</Directory>
+
+		<Feature Id="xedisk" Title="xedisk" Level="1" ConfigurableDirectory="XEDISK.DIR" Description="Command-line utility for manipulating Atari XL/XE disk images." AllowAdvertise="no">
+			<ComponentRef Id="xedisk.exe" />
+			<Feature Id="path" Title="Add to Path" Level="1" Description="Add the directory to the Path environment variable so that you don't have to type the location of xedisk at the command prompt." AllowAdvertise="no">
+				<ComponentRef Id="path" />
+			</Feature>
+		</Feature>
+
+		<Feature Id="docs" Title="Documentation" Level="1" ConfigurableDirectory="XEDISK.DIR" Description="Documentation file." AllowAdvertise="no">
+			<ComponentRef Id="xedisk_manual.html" />
+			<Feature Id="docs.lnk" Title="Start menu shortcuts" Level="1" Description="Adds documentation and website links to the Programs menu." AllowAdvertise="no">
+				<ComponentRef Id="Documentation.lnk" />
+				<ComponentRef Id="Website.url" />
+			</Feature>
+		</Feature>
+
+	</Product>
+</Wix>

@@ -18,6 +18,8 @@ PATHSEP    := $(shell echo '\\')
 
 DMD        := dmd.exe
 CC         := dmc.exe
+CANDLE     := candle -ext WixUtilExtension -nologo
+LIGHT      := light -ext WixUtilExtension -nologo
 
 LIB_XEBASE  := $(builddir)/xebase.lib
 LIB_XEDISK  := $(builddir)/xedisk.lib
@@ -39,12 +41,15 @@ debug :
 unittest :
 	@$(MAKE) --no-print-directory BUILD=debug unittest
 	@$(MAKE) --no-print-directory BUILD=release unittest
+setup :
+	@$(MAKE) --no-print-directory BUILD=release setup
 else
 # This branch is normally taken in recursive builds. All we need to do
 # is set the default build to $(BUILD) (which is either debug or
 # release) and then let the unittest depend on that build's unittests.
 $(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(EXE_XEDISK)
 unittest : $(addsuffix $(DOTEXE),$(addprefix $(builddir)/unittest/,$(TEST_MODULES)))
+setup    : build/xedisk-$(VERSION)-win32.msi
 endif
 
 $(EXE_XEDISK): $(src_exe_xedisk) $(LIB_XEBASE) $(LIB_XEDISK)
@@ -72,6 +77,12 @@ $(builddir)/unittest/%$(DOTEXE) : %.d $(builddir)/emptymain.d xe/test.d $(LIB_XE
 
 $(builddir)/emptymain.d :
 	@mkdir -p $(builddir) && echo 'void main(){}' >$@
+
+build/xedisk-$(VERSION)-win32.msi: build/xedisk.wixobj setup/license.rtf setup/Website.url $(builddir)/xedisk.exe xedisk_manual.html
+	$(LIGHT) -ext WixUIExtension -sice:ICE69 -o $@ $<
+
+build/xedisk.wixobj: setup/xedisk.wxs
+	$(CANDLE) -dVERSION=$(VERSION) -o $@ $<
 
 CLEAN += build
 
