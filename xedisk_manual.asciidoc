@@ -1,0 +1,34 @@
+xedisk - Atari XL/XE Disk Image Utility
+=======================================
+
+// This file is in AsciiDoc format. It is the source for xedisk_manual.html.
+:Compact-Option:
+
+xedisk is a command-line utility for viewing and modifying the contents of
+http://en.wikipedia.org/wiki/Atari_8-bit_family[8-bit Atari] disk images.
+
+Supported disk image formats
+----------------------------
+
+- ATR (SIO2PC, APE, etc.)
+- XFD (Xformer)
+- raw images with IDEa (KMK/JZ) and/or MS-DOS partition tables
+
+Supported file systems
+----------------------
+
+- SpartaDOS (SpartaDOS 3.x, Sparta DOS X)
+- MyDOS (MyDOS 4.5x)
+- RP3FS (R0l0Player 3)
+
+Syntax
+------
+
+	xedisk command [options]
+
+
+Feedback
+--------
+
+Use https://github.com/epi/xedisk/issues[tracker]
+to submit bug reports, feature requests and small code patches.
