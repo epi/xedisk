@@ -17,7 +17,7 @@ template Test(string s)
 
 void sink(T)(T value) {}
 
-version(Linux)
+version(linux)
 {
 	extern (C)
 	FILE* fmemopen(void* buf, size_t size, const(char)* mode);
@@ -32,7 +32,7 @@ else
 
 auto captureConsole(lazy void dg, string cin = "\n")
 {
-	version(Linux)
+	version(linux)
 	{
 		FILE* fp_cin = enforce(fmemopen(cast(void*) cin.ptr, cin.length, "r"),
 			"fmemopen failed");
@@ -87,7 +87,7 @@ auto captureConsole(lazy void dg, string cin = "\n")
 	fflush(fp_cout);
 	fflush(fp_cerr);
 
-	version(Linux)
+	version(linux)
 	{
 		return tuple(
 			cout_ptr[0 .. cout_size].idup,
