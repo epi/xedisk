@@ -159,12 +159,6 @@ struct MBR
 
 static assert(MBR.sizeof == 0x200);
 
-union RawStruct(T, string name = "strukt") if (is(T == struct))
-{
-	mixin("T " ~ name ~ "; alias " ~ name ~ " this;");
-	ubyte[T.sizeof] raw;
-}
-
 auto readMBR(string filename)
 {
 	auto f = File(filename, "rb");

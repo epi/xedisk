@@ -77,3 +77,9 @@ alias littleEndianToNative leton;
 alias bigEndianToNative beton;
 alias nativeToLittleEndian ntole;
 alias nativeToBigEndian ntobe;
+
+union RawStruct(T, string name = "strukt") if (is(T == struct))
+{
+	mixin("T " ~ name ~ "; alias " ~ name ~ " this;");
+	ubyte[T.sizeof] raw;
+}
