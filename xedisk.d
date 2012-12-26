@@ -100,12 +100,10 @@ immutable cOpenModes = [ "rb", "r+b", "w+b" ]; // must match OpenMode!
 ScopedHandles openFileStream(string fileName, OpenMode mode)
 {
 	ScopedHandles sh;
-	switch (mode)
+	final switch (mode)
 	{
 	case OpenMode.ReadOnly, OpenMode.ReadWrite, OpenMode.Create:
 		sh.file = File(fileName, cOpenModes[mode]); break;
-	default:
-		assert(false);
 	}
 	sh.stream = new FileStream(sh.file);
 	return sh;
@@ -214,37 +212,71 @@ void mkfs(string[] args)
 void info(string[] args)
 {
 	uint partition;
+	bool oneline;
 
 	getopt(args,
 		config.caseSensitive,
+		"s|oneline", &oneline,
 		"p|partition", &partition);
 
 	enforce(args.length >= 3, "Missing image file name.");
-	auto sh = partition
-		? openPartition(args[2], partition, OpenMode.ReadOnly)
-		: openPartitionTable(args[2], OpenMode.ReadOnly);
-
-	if (sh.table && !sh.disk)
+	foreach (file; args[2 .. $])
 	{
-		writeln("Partition table type: ", sh.table.getType());
-		writeln("Number of partitions: ", walkLength(sh.table[]));
-		return;
-	}
+		try
+		{
+			auto sh = partition
+				? openPartition(file, partition, OpenMode.ReadOnly)
+				: openPartitionTable(file, OpenMode.ReadOnly);
 
-	if (!sh.table && !sh.disk)
-		sh.disk = XeDisk.open(sh.stream, XeDiskOpenMode.ReadOnly);
+			if (oneline)
+				writef("%-32.32s%8d ", sh.file.name.baseName(), sh.file.size);
+			if (sh.table && !sh.disk)
+			{
+				writefln(oneline ? "%-16.16s %2d" :
+					"Partition table type: %s\n" ~
+					"Number of partitions: %s",
+					sh.table.getType(), walkLength(sh.table[]));
+				continue;
+			}
 
-	if (sh.disk)
-	{
-		writeln("Disk type:            ", sh.disk.getType());
-		writeln("Total sectors:        ", sh.disk.getSectors());
-		writeln("Bytes per sectors:    ", sh.disk.getSectorSize());
+			if (!sh.table && !sh.disk)
+				sh.disk = XeDisk.open(sh.stream, XeDiskOpenMode.ReadOnly);
 
-		sh.fs = XeFileSystem.open(sh.disk);
-		writeln("\nFile system type:     ", sh.fs.getType());
-		writeln("Label:                ", sh.fs.getLabel());
-		writeln("Free sectors:         ", sh.fs.getFreeSectors());
-		writeln("Free bytes:           ", sh.fs.getFreeBytes());
+			if (!sh.disk && oneline)
+				writeln("(unrecognized)");
+			if (sh.disk)
+			{
+				writef(oneline ? "%-16.16s    %8d%4d " :
+					"Disk type:            %s\n" ~
+					"Total sectors:        %s\n" ~
+					"Bytes per sectors:    %s\n",
+					sh.disk.getType(), sh.disk.getSectors(),
+					sh.disk.getSectorSize());
+
+				// TODO: s/open/tryOpen/g
+				try
+				{
+					sh.fs = XeFileSystem.open(sh.disk);
+					writef(oneline ? "%-16.16s %-11.11s%8d%12d\n" :
+						"\nFile system type:     %s\n" ~
+						"Label:                %s\n" ~
+						"Free sectors:         %s\n" ~
+						"Free bytes:           %s\n",
+						sh.fs.getType(), sh.fs.getLabel(),
+						sh.fs.getFreeSectors(), sh.fs.getFreeBytes());
+				}
+				catch (Exception e)
+				{
+					if (oneline)
+						writeln("(unrecognized)");
+				}
+			}
+		}
+		catch (Exception e)
+		{
+			stderr.writefln("%s: `%s': %s",
+				args[0], file, e.msg);
+		}
 	}
 }
 
@@ -274,8 +306,7 @@ unittest
 		"Total sectors:        720\n" ~
 		"Bytes per sectors:    256\n");
 	assert (res[1] == "");
-	assert (cast(XeException) res[2]);
-	assert ((cast(XeException) res[2]).errorCode == 148);
+	assert (!res[2]);
 }
 
 unittest
