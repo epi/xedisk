@@ -96,24 +96,16 @@ static assert(AtrHeader.sizeof == 16);
 
 class AtrDisk : XeDisk
 {
-	override uint getSectors() { return _sectorCount; }
+	override @property uint sectorCount() const { return _sectorCount; }
 
-	override uint getSectorSize(uint sector = 0)
-	{
-		if (sector == 0)
-			return _sectorSize;
-		ulong offset;
-		uint size;
-		getOffsetAndSizeOfSector(sector, offset, size);
-		return size;
-	}
+	override @property uint sectorSize() const { return _sectorSize; }
 
-	override bool isWriteProtected()
+	override @property bool isWriteProtected() const
 	{
 		return !_sio2pcFlags && !!(_apeFlags & ApeFlags.WriteProtected);
 	}
 
-	override void setWriteProtected(bool value)
+	override @property void isWriteProtected(bool value)
 	{
 		enforce(_openMode != XeDiskOpenMode.ReadOnly,
 			"Disk is opened as read-only");
@@ -133,7 +125,7 @@ class AtrDisk : XeDisk
 		_stream.write(0, header.raw);
 	}
 
-	override string getType() const pure nothrow { return "ATR"; }
+	override @property string type() const { return "ATR"; }
 
 protected:
 	override size_t doReadSector(uint sector, ubyte[] buffer)
@@ -154,6 +146,14 @@ protected:
 		_stream.write(offset, buffer[0 .. len]);
 	}
 
+	override uint doGetSizeOfSector(uint sector)
+	{
+		ulong offset;
+		uint size;
+		getOffsetAndSizeOfSector(sector, offset, size);
+		return size;
+	}
+
 private:
 	this(RandomAccessStream stream, uint sectorCount, uint sectorSize,
 		BootSectorLayout bootSectorLayout,
@@ -169,7 +169,7 @@ private:
 	}
 
 	void getOffsetAndSizeOfSector(uint sector,
-		out ulong offset, out uint size)
+		out ulong offset, out uint size) const
 	{
 		offset = AtrHeader.sizeof;
 		if (_bootSectorLayout == BootSectorLayout.Full)
@@ -198,7 +198,7 @@ private:
 		uint size;
 
 		auto stream = new MemoryStream(new ubyte[0]);
-		auto disk = AtrDisk.doCreate(stream, 720, 256);
+		auto disk = AtrDisk.createAtr(stream, 720, 256);
 		assert(stream.getLength() == 720 * 256 - 384 + 16);
 
 		assert(disk._bootSectorLayout == BootSectorLayout.Short);
@@ -236,10 +236,10 @@ private:
 
 	shared static this()
 	{
-		registerType("ATR", &tryOpen, &doCreate);
+		registerType("ATR", &openAtr, &createAtr);
 	}
 
-	static AtrDisk tryOpen(RandomAccessStream stream, XeDiskOpenMode mode)
+	static AtrDisk openAtr(RandomAccessStream stream, XeDiskOpenMode mode)
 	{
 		RawStruct!AtrHeader header;
 		if (stream.read(0, header.raw) != header.sizeof
@@ -287,12 +287,12 @@ private:
 
 	unittest
 	{
-		mixin(Test!"AtrDisk.tryOpen (1)");
+		mixin(Test!"AtrDisk.openAtr (1)");
 		enum createAndOpen = q{
 			RawStruct!AtrHeader header;
 			header = AtrHeader(size / paragraph, sectorSize);
 			scope stream = new MemoryStream(header.raw ~ new ubyte[size]);
-			auto disk = AtrDisk.tryOpen(stream, XeDiskOpenMode.ReadOnly);
+			auto disk = AtrDisk.openAtr(stream, XeDiskOpenMode.ReadOnly);
 		};
 
 		{
@@ -313,21 +313,21 @@ private:
 			assert(disk._bootSectorLayout == BootSectorLayout.Short);
 			assert(disk._apeFlags == 0);
 			assert(disk._sio2pcFlags == 0);
-			assert(disk.getSectorSize() == 256);
-			assert(disk.getSectorSize(1) == 128);
-			assert(disk.getSectorSize(2) == 128);
-			assert(disk.getSectorSize(3) == 128);
-			assert(disk.getSectorSize(4) == 256);
-			assert(!disk.isWriteProtected());
-			assertThrown(disk.setWriteProtected(true));
+			assert(disk.sectorSize == 256);
+			assert(disk.getSizeOfSector(1) == 128);
+			assert(disk.getSizeOfSector(2) == 128);
+			assert(disk.getSizeOfSector(3) == 128);
+			assert(disk.getSizeOfSector(4) == 256);
+			assert(!disk.isWriteProtected);
+			assertThrown(disk.isWriteProtected = true);
 			disk._openMode = XeDiskOpenMode.ReadWrite;
-			disk.setWriteProtected(true);
-			assert(disk.isWriteProtected());
-			disk.setWriteProtected(false);
-			assert(!disk.isWriteProtected());
+			disk.isWriteProtected = true;
+			assert(disk.isWriteProtected);
+			disk.isWriteProtected = false;
+			assert(!disk.isWriteProtected);
 			disk._sio2pcFlags = cast(Sio2pcFlags) 1;
-			assertThrown(disk.setWriteProtected(false));
-			assert(disk.getType() == "ATR");
+			assertThrown(disk.isWriteProtected = false);
+			assert(disk.type == "ATR");
 		}
 		{
 			enum sectors = 65535;
@@ -362,7 +362,7 @@ private:
 			auto content = new ubyte[size];
 			content[512] = 1;
 			auto stream = new MemoryStream(header.raw ~ content);
-			auto disk = AtrDisk.tryOpen(stream, XeDiskOpenMode.ReadOnly);
+			auto disk = AtrDisk.openAtr(stream, XeDiskOpenMode.ReadOnly);
 			assert(disk);
 			assert(disk._sectorCount == 720);
 			assert(disk._sectorSize == 256);
@@ -370,14 +370,14 @@ private:
 			content[512] = 0;
 			content[128] = 1;
 			stream = new MemoryStream(header.raw ~ content);
-			disk = AtrDisk.tryOpen(stream, XeDiskOpenMode.ReadOnly);
+			disk = AtrDisk.openAtr(stream, XeDiskOpenMode.ReadOnly);
 			assert(disk);
 			assert(disk._sectorCount == 720);
 			assert(disk._sectorSize == 256);
 			assert(disk._bootSectorLayout == BootSectorLayout.Packed);
 			content[512] = 1;
 			stream = new MemoryStream(header.raw ~ content);
-			disk = AtrDisk.tryOpen(stream, XeDiskOpenMode.ReadOnly);
+			disk = AtrDisk.openAtr(stream, XeDiskOpenMode.ReadOnly);
 			assert(disk);
 			assert(disk._sectorCount == 720);
 			assert(disk._sectorSize == 256);
@@ -385,7 +385,7 @@ private:
 		}
 	}
 
-	static AtrDisk doCreate(RandomAccessStream stream,
+	static AtrDisk createAtr(RandomAccessStream stream,
 		uint sectorCount, uint sectorSize)
 	{
 		enforce(sectorCount >= 3 && sectorCount <= 65535,
@@ -417,24 +417,24 @@ private:
 
 	unittest
 	{
-		mixin(Test!"AtrDisk.doCreate (1)");
+		mixin(Test!"AtrDisk.createAtr (1)");
 		{
 			auto stream = new MemoryStream(new ubyte[0]);
-			auto disk = AtrDisk.doCreate(stream, 65535, 512);
+			auto disk = AtrDisk.createAtr(stream, 65535, 512);
 			assert(stream.getLength() == 65535 * 512 + 16);
-			assert(disk.getSectors() == 65535);
-			assert(disk.getSectorSize() == 512);
+			assert(disk.sectorCount == 65535);
+			assert(disk.sectorSize == 512);
 			assert(disk._bootSectorLayout == BootSectorLayout.Full);
 		}
 		{
 			auto stream = new MemoryStream(new ubyte[0]);
-			auto disk = AtrDisk.doCreate(stream, 720, 256);
+			auto disk = AtrDisk.createAtr(stream, 720, 256);
 			assert(stream.getLength() == 720 * 256 - 384 + 16);
 			assert(disk._bootSectorLayout == BootSectorLayout.Short);
 		}
 		{
 			scope stream = new MemoryStream(new ubyte[0]);
-			assertThrown(AtrDisk.doCreate(stream, 720, 129));
+			assertThrown(AtrDisk.createAtr(stream, 720, 129));
 			assert(stream.getLength() == 0);
 		}
 	}

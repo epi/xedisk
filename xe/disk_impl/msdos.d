@@ -38,25 +38,25 @@ version(unittest)
 
 class MsdosPartition : XePartition
 {
-	override uint getSectors() { return _entry.sectors; }
+	override @property uint sectorCount() const { return _entry.sectors; }
 
-	override uint getSectorSize(uint sector = 0) { return 512; }
+	override @property uint sectorSize() const { return 512; }
 
-	override bool isWriteProtected() { return false; }
+	override @property bool isWriteProtected() const { return false; }
 
-	override void setWriteProtected(bool value)
+	override @property void isWriteProtected(bool value)
 	{
 		throw new XeException("Not implemented");
 	}
 
-	override string getType() const pure nothrow
+	override @property string type() const
 	{
 		return "MS-DOS partition (" ~ _typeString ~ ")";
 	}
 
-	override ulong getPhysicalSectors() { return _entry.sectors; }
+	override @property ulong physicalSectorCount() { return _entry.sectors; }
 
-	override ulong getFirstSector() { return _entry.lbaFirst; }
+	override @property ulong firstPhysicalSector() { return _entry.lbaFirst; }
 
 protected:
 	override size_t doReadSector(uint sector, ubyte[] buffer)
@@ -70,6 +70,8 @@ protected:
 		auto len = min(buffer.length, 512);
 		_stream.write(streamPosition(sector), buffer[0 .. len]);
 	}
+
+	override uint doGetSizeOfSector(uint sector) { return 512; }
 
 private:
 	this(RandomAccessStream st, PartitionEntry entry)
@@ -131,10 +133,16 @@ struct PartitionEntry
 	ubyte[4] _lbaFirst;
 	ubyte[4] _sectors;
 
-	@property uint lbaFirst() { return littleEndianToNative!uint(_lbaFirst); }
+	@property uint lbaFirst() const
+	{
+		return littleEndianToNative!uint(_lbaFirst);
+	}
 	@property void lbaFirst(uint f) { _lbaFirst = nativeToLittleEndian(f); }
 
-	@property uint sectors() { return littleEndianToNative!uint(_sectors); }
+	@property uint sectors() const
+	{
+		return littleEndianToNative!uint(_sectors);
+	}
 	@property void sectors(uint s) { _sectors = nativeToLittleEndian(s); }
 
 	@property bool isEmpty()
@@ -200,7 +208,7 @@ private:
 
 class MsdosPartitionTable : XePartitionTable
 {
-	override string getType()
+	override @property string type() const
 	{
 		return "MS-DOS";
 	}
@@ -213,10 +221,10 @@ class MsdosPartitionTable : XePartitionTable
 private:
 	static this()
 	{
-		registerType("MS-DOS", &tryOpen);
+		registerType("MS-DOS", &openMsdosPartitionTable);
 	}
 
-	static MsdosPartitionTable tryOpen(RandomAccessStream stream)
+	static MsdosPartitionTable openMsdosPartitionTable(RandomAccessStream stream)
 	{
 		auto result = new MsdosPartitionTable(stream);
 		if (stream.read(0, result._mbr.raw) < result._mbr.raw.length)
@@ -253,7 +261,7 @@ unittest
 {
 	mixin(Test!"MsdosPartitionTable (1)");
 	scope stream = new FileStream(File("testfiles/sda.mbr", "rb"));
-	scope pt = MsdosPartitionTable.tryOpen(stream);
+	scope pt = MsdosPartitionTable.openMsdosPartitionTable(stream);
 	assert(pt);
 	assert(walkLength(pt[]) == 3);
 

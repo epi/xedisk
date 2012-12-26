@@ -32,7 +32,7 @@ int main(int argc, char** argv)
 	{
 		printf("%s: %d sectors * %d bytes\n",
 			XeDisk_GetType(pDisk),
-			XeDisk_GetSectors(pDisk),
+			XeDisk_GetSectorCount(pDisk),
 			XeDisk_GetSectorSize(pDisk)),
 		XeDisk_Free(pDisk);
 	}

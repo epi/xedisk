@@ -129,7 +129,7 @@ ScopedHandles openPartitionTable(string fileName, OpenMode mode)
 {
 	assert(mode != OpenMode.Create);
 	auto sh = openFileStream(fileName, mode);
-	sh.table = XePartitionTable.open(sh.stream);
+	sh.table = XePartitionTable.tryOpen(sh.stream);
 	return sh;
 }
 
@@ -235,12 +235,12 @@ void info(string[] args)
 				writefln(oneline ? "%-16.16s %2d" :
 					"Partition table type: %s\n" ~
 					"Number of partitions: %s",
-					sh.table.getType(), walkLength(sh.table[]));
+					sh.table.type, walkLength(sh.table[]));
 				continue;
 			}
 
 			if (!sh.table && !sh.disk)
-				sh.disk = XeDisk.open(sh.stream, XeDiskOpenMode.ReadOnly);
+				sh.disk = XeDisk.tryOpen(sh.stream, XeDiskOpenMode.ReadOnly);
 
 			if (!sh.disk && oneline)
 				writeln("(unrecognized)");
@@ -250,8 +250,8 @@ void info(string[] args)
 					"Disk type:            %s\n" ~
 					"Total sectors:        %s\n" ~
 					"Bytes per sectors:    %s\n",
-					sh.disk.getType(), sh.disk.getSectors(),
-					sh.disk.getSectorSize());
+					sh.disk.type, sh.disk.sectorCount,
+					sh.disk.sectorSize);
 
 				// TODO: s/open/tryOpen/g
 				try
@@ -722,12 +722,12 @@ void dump(string[] args)
 	enforce(args.length >= 3, "Missing image file name");
 	auto outfile = stdout;
 	auto sh = openPartition(args[2], partition, OpenMode.ReadOnly);
-	auto buf = new ubyte[sh.disk.getSectorSize()];
+	auto buf = new ubyte[sh.disk.sectorSize];
 	if (args.length == 3)
 		args ~= "-";
 	foreach (arg; args[3 .. $])
 	{
-		foreach (sector; parseSectorRange(arg, sh.disk.getSectors()))
+		foreach (sector; parseSectorRange(arg, sh.disk.sectorCount))
 		{
 			auto n = sh.disk.readSector(sector, buf);
 			outfile.rawWrite(buf[0 .. n]);
@@ -790,11 +790,11 @@ void listPartitions(string[] args)
 	foreach (partition; sh.table)
 	{
 		writefln("%3d. %10d %10d %10d  %10d %4d  %s",
-			++i, partition.getFirstSector(),
-			partition.getFirstSector() + partition.getSectors() - 1,
-			partition.getPhysicalSectors(),
-			partition.getSectors(), partition.getSectorSize(),
-			partition.getType());
+			++i, partition.firstPhysicalSector,
+			partition.firstPhysicalSector + partition.sectorCount - 1,
+			partition.physicalSectorCount,
+			partition.sectorCount, partition.sectorSize,
+			partition.type);
 	}
 }
 
@@ -817,13 +817,13 @@ void diskCopy(string[] args)
 	auto dest = exists(args[3])
 		? openPartition(args[3], outputPartition, OpenMode.ReadWrite)
 		: createDisk(args[3],
-			outputType.length ? outputType : src.disk.getType(),
-			src.disk.getSectors(), src.disk.getSectorSize());
-	enforce(src.disk.getSectors() == dest.disk.getSectors()
-		&& src.disk.getSectorSize() == dest.disk.getSectorSize(),
+			outputType.length ? outputType : src.disk.type,
+			src.disk.sectorCount, src.disk.sectorSize);
+	enforce(src.disk.sectorCount == dest.disk.sectorCount
+		&& src.disk.sectorSize == dest.disk.sectorSize,
 		"Output disk geometry is different than the input disk geometry");
-	auto buf = new ubyte[src.disk.getSectorSize()];
-	foreach (sector; 1 .. src.disk.getSectors() + 1)
+	auto buf = new ubyte[src.disk.sectorSize];
+	foreach (sector; 1 .. src.disk.sectorCount + 1)
 		dest.disk.writeSector(sector,
 			buf[0 .. src.disk.readSector(sector, buf)]);
 }

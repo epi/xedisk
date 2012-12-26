@@ -36,7 +36,7 @@ XeDisk *XeDisk_CreateFile(const char *fileName, const char *type,
 	unsigned numSectors, unsigned bytesPerSector);
 
 void XeDisk_Free(XeDisk *pDisk);
-unsigned XeDisk_GetSectors(XeDisk* pDisk);
+unsigned XeDisk_GetSectorCount(XeDisk* pDisk);
 unsigned XeDisk_GetSectorSize(XeDisk* pDisk);
 const char *XeDisk_GetType(XeDisk* pDisk);
 

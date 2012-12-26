@@ -74,8 +74,7 @@ private:
 
 	static FatFileSystem tryOpen(XeDisk disk)
 	{
-		auto bps = disk.getSectorSize(4);
-		if (bps != 512)
+		if (disk.sectorSize != 512)
 			return null;
 
 		{

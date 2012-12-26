@@ -285,8 +285,8 @@ final class SectorCache
 		}
 	}
 
-	uint getSectors() { return _disk.getSectors(); }
-	uint getSectorSize() { return _disk.getSectorSize(); }
+	uint getSectors() { return _disk.sectorCount; }
+	uint getSectorSize() { return _disk.sectorSize; }
 
 private:
 	XeDisk _disk;
@@ -313,7 +313,7 @@ private:
 				insert(sector);
 			else
 				replaceLru(sector);
-			_mru._data.length = _disk.getSectorSize(sector);
+			_mru._data.length = _disk.getSizeOfSector(sector);
 			if (readFromDisk)
 				_disk.readSector(sector, _mru._data);
 		}

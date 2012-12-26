@@ -231,11 +231,11 @@ void XeDisk_Free(CXeDisk* cdisk)
 }
 
 export extern (C)
-uint XeDisk_GetSectors(CXeDisk* cdisk)
+uint XeDisk_GetSectorCount(CXeDisk* cdisk)
 {
 	resetLastException();
 	try
-		return cdisk.impl.getSectors();
+		return cdisk.impl.sectorCount;
 	catch (Exception e)
 		setLastException(e.msg);
 	return uint.max;
@@ -246,7 +246,7 @@ uint XeDisk_GetSectorSize(CXeDisk* cdisk)
 {
 	resetLastException();
 	try
-		return cdisk.impl.getSectorSize();
+		return cdisk.impl.sectorSize;
 	catch (Exception e)
 		setLastException(e.msg);
 	return uint.max;
@@ -259,7 +259,7 @@ const(char)* XeDisk_GetType(CXeDisk* cdisk)
 	try
 	{
 		if (!cdisk.type)
-			cdisk.type = cdisk.impl.getType() ~ "\0";
+			cdisk.type = cdisk.impl.type ~ "\0";
 		return cdisk.type.ptr;
 	}
 	catch (Exception e)

@@ -38,41 +38,19 @@ version(unittest)
 
 class IdeaPartition : XePartition
 {
-	override uint getSectorSize(uint sector = 0)
-	{
-		if (_pi.clsize == PartitionSectorSize.B256)
-		{
-			if (sector >= 1 && sector <= 3)
-				return 128;
-			else
-				return 256;
-		}
-		else if (_pi.clsize == PartitionSectorSize.B512)
-		{
-			return 512;
-		}
-		else
-			assert(false);
-	}
-
-	override bool isWriteProtected()
+	override @property bool isWriteProtected() const
 	{
 		return (_pi.status & PartitionStatus.ReadOnly) != 0;
 	}
 
-	override void setWriteProtected(bool value)
+	override @property void isWriteProtected(bool value)
 	{
 		throw new XeException("Not implemented");
 	}
 
-	override string getType() const pure nothrow { return "IDEa partition"; }
+	override string type() const { return "IDEa partition"; }
 
-	override uint getSectors()
-	{
-		return _pi.len;
-	}
-
-	override ulong getPhysicalSectors()
+	override @property uint sectorSize() const
 	{
 		if (_pi.clsize == PartitionSectorSize.B256)
 			return (_pi.len + 1) / 2;
@@ -81,20 +59,41 @@ class IdeaPartition : XePartition
 		assert(false);
 	}
 
-	override ulong getFirstSector() { return _pi.begin + 1; }
+	override @property uint sectorCount() const { return _pi.len; }
+
+	override @property ulong physicalSectorCount() const
+	{
+		if (_pi.clsize == PartitionSectorSize.B256)
+			return (_pi.len + 1) / 2;
+		else if (_pi.clsize == PartitionSectorSize.B512)
+			return _pi.len;
+		assert(false);
+	}
+
+	override @property ulong firstPhysicalSector() const { return _pi.begin + 1; }
 
 protected:
 	override size_t doReadSector(uint sector, ubyte[] buffer)
 	{
-		auto len = min(buffer.length, getSectorSize(sector));
+		auto len = min(buffer.length, doGetSizeOfSector(sector));
 		auto res = _stream.read(streamPosition(sector), buffer[0 .. len]);
 		return res;
 	}
 
 	override void doWriteSector(uint sector, in ubyte[] buffer)
 	{
-		auto len = min(buffer.length, getSectorSize(sector));
+		auto len = min(buffer.length, doGetSizeOfSector(sector));
 		_stream.write(streamPosition(sector), buffer[0 .. len]);
+	}
+
+	override uint doGetSizeOfSector(uint sector)
+	{
+		if (_pi.clsize == PartitionSectorSize.B256)
+			return sector > 3 ? 256 : 128;
+		else if (_pi.clsize == PartitionSectorSize.B512)
+			return 512;
+		else
+			assert(false);
 	}
 
 private:
@@ -230,7 +229,7 @@ private:
 
 class IdeaPartitionTable : XePartitionTable
 {
-	override string getType()
+	override @property string type() const
 	{
 		return "IDEa";
 	}
@@ -243,10 +242,10 @@ class IdeaPartitionTable : XePartitionTable
 private:
 	static this()
 	{
-		registerType("IDEa", &tryOpen);
+		registerType("IDEa", &openIdeaPartitionTable);
 	}
 
-	static IdeaPartitionTable tryOpen(RandomAccessStream stream)
+	static IdeaPartitionTable openIdeaPartitionTable(RandomAccessStream stream)
 	{
 		auto result = new IdeaPartitionTable(stream);
 		if (stream.read(0, result._data.raw) < result._data.raw.length)
@@ -277,7 +276,7 @@ unittest
 {
 	mixin(Test!"IdeaPartitionTable (1)");
 	scope stream = new FileStream(File("testfiles/sdc.mbr", "rb"));
-	scope pt = IdeaPartitionTable.tryOpen(stream);
+	scope pt = IdeaPartitionTable.openIdeaPartitionTable(stream);
 	assert(pt);
 	assert(walkLength(pt[]) == 6);
 	auto r = pt[];

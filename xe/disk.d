@@ -20,7 +20,7 @@ along with xedisk.  If not, see <http://www.gnu.org/licenses/>.
 
 module xe.disk;
 
-debug import std.stdio;
+import std.stdio;
 import std.algorithm;
 import std.exception;
 import std.range;
@@ -29,11 +29,24 @@ import std.typecons;
 import std.conv;
 import xe.streams;
 import xe.exception;
+import xe.bytemanip;
 
 version(unittest)
 {
 	import xe.test;
 }
+
+mixin(CTFEGenerateExceptionClass("InvalidSectorNumberException", 139,
+	"Invalid sector number"));
+mixin(CTFEGenerateExceptionClass("DiskReadOnlyException", 144,
+	"Disk is read-only"));
+
+///
+alias XeDisk function(RandomAccessStream s, XeDiskOpenMode mode)
+	DiskOpenFunc;
+///
+alias XeDisk function(RandomAccessStream s, uint sectorCount, uint sectorSize)
+	DiskCreateFunc;
 
 ///
 enum XeDiskOpenMode
@@ -44,46 +57,70 @@ enum XeDiskOpenMode
 }
 
 ///
+enum PercomFlags : ubyte
+{
+	None = 0x00,
+	EightInch = 0x02,
+	FM = 0x00,
+	MFM = 0x04,
+	HardDisk = 0x08
+}
+
+/// Big-endian
+struct Percom
+{
+align(1):
+	ubyte tracks;
+	ubyte headSpeed;
+	ubyte[2] sectorsPerTrack;
+	union
+	{
+		ubyte sectorsPerTrackHigh;
+		ubyte sides;
+	}
+	PercomFlags flags;
+	ubyte[2] sectorSize;
+	ubyte _unused1 = 0xff;
+	ubyte[3] _unused2;
+}
+
+static assert(Percom.sizeof == 12);
+
+///
 class XeDisk
 {
 	///
-	static XeDisk create(RandomAccessStream s, string type, uint totalSectors, uint bytesPerSector)
+	static XeDisk create(RandomAccessStream stream, string type,
+		uint sectorCount, uint sectorSize)
 	{
 		auto td = _types.get(toUpper(type), Nullable!TypeDelegates());
-		if (td.isNull())
-			throw new XeException(format("Unknown disk type `%s'", type));
-		auto disk = td.doCreate(s, totalSectors, bytesPerSector);
+		enforce(!td.isNull(), format("Unknown disk type `%s'", type));
+		auto disk = td.doCreate(stream, sectorCount, sectorSize);
 		disk._openMode = XeDiskOpenMode.ReadWrite;
 		return disk;
 	}
 
-	///
-	static XeDisk open(RandomAccessStream s, XeDiskOpenMode mode = XeDiskOpenMode.ReadOnly)
+	static XeDisk tryOpen(RandomAccessStream stream,
+		XeDiskOpenMode mode = XeDiskOpenMode.ReadOnly)
 	{
 		foreach (type, td; _types)
 		{
-			// anything can be XFD...
-			if (type == "XFD")
-				continue;
-			auto disk = td.get().tryOpen(s, mode);
+			auto disk = td.get().tryOpen(stream, mode);
 			if (disk !is null)
 				return disk;
 		}
-		// fallback - if XFD is supported, treat unrecognized file type as XFD
-		auto td = _types.get("XFD", Nullable!TypeDelegates());
-		if (td.isNull())
-			throw new XeException("Could not recognize disk type");
+		return null;
+	}
 
-		auto disk = td.get().tryOpen(s, mode);
-		if (disk !is null)
-			return disk;
-		throw new XeException("Could not recognize disk type");
+	///
+	static XeDisk open(RandomAccessStream stream,
+		XeDiskOpenMode mode = XeDiskOpenMode.ReadOnly)
+	{
+		return enforce(tryOpen(stream, mode), "Could not recognize disk type");
 	}
 
 	protected static void registerType(
-		string type,
-		XeDisk function(RandomAccessStream s, XeDiskOpenMode mode) tryOpen,
-		XeDisk function(RandomAccessStream s, uint totalSectors, uint bytesPerSector) doCreate)
+		string type, DiskOpenFunc tryOpen, DiskCreateFunc doCreate)
 	{
 		type = toUpper(type);
 		_types[type] = TypeDelegates(tryOpen, doCreate);
@@ -93,60 +130,55 @@ class XeDisk
 	///
 	final size_t readSector(uint sector, ubyte[] buffer)
 	{
-		enforce(sector >= 1 && sector <= this.getSectors(),
-			new XeException(format("Sector number out of bounds (%s/%s)", sector, this.getSectors()), 139));
+		enforceEx!InvalidSectorNumberException(
+			sector >= 1 && sector <= this.sectorCount,
+			format("Sector number out of bounds (%s/%s)",
+				sector, this.sectorCount));
 		auto result = doReadSector(sector, buffer);
-		debug (SectorOp) writefln("sector %05d  read from disk   length %d", sector, result);
-		enforce(result == min(buffer.length, this.getSectorSize(sector)), format("EOF while reading sector #%s", sector));
+		debug(SectorOp) writefln(
+			"sector %05d  read from disk   length %d", sector, result);
+		debug enforce(result == min(buffer.length, doGetSizeOfSector(sector)),
+			format("EOF while reading sector #%s", sector));
 		return result;
 	}
 
 	///
 	final void writeSector(uint sector, ubyte[] buffer)
 	{
-		enforce(sector >= 1 && sector <= this.getSectors(),
-			new XeException(format("Sector number out of bounds (%s/%s)", sector, this.getSectors()), 139));
-		enforce(_openMode != XeDiskOpenMode.ReadOnly, new XeException("Attempted to write to a disk opened read-only", 144));
-		enforce(!isWriteProtected(), new XeException("Attempted to write to a write protected disk", 144));
+		enforceEx!InvalidSectorNumberException(
+			sector >= 1 && sector <= this.sectorCount,
+			format("Sector number out of bounds (%s/%s)",
+				sector, this.sectorCount));
+		enforceEx!DiskReadOnlyException(_openMode != XeDiskOpenMode.ReadOnly,
+			"Attempted to write to a disk opened read-only");
+		enforceEx!DiskReadOnlyException(!isWriteProtected,
+			"Attempted to write to a write-protected disk");
 		if (_openMode == XeDiskOpenMode.ReadWriteDeferred)
-		{
-			debug (SectorOp) writefln("sector %05d  deferred write   length %d", sector, len);
-			_sectorsToWrite[sector] = buffer.idup[]; // only most recent write will be scheduled
-		}
-		else
-		{
-			debug (SectorOp) writefln("sector %05d  write to disk    length %d", sector, len);
-			doWriteSector(sector, buffer);
-		}
+			assert(false);
+		debug(SectorOp) writefln(
+			"sector %05d  write to disk    length %d", sector, buffer.length);
+		doWriteSector(sector, buffer);
 	}
 
-	final bool isDirty()
+	///
+	abstract @property uint sectorCount() const;
+	///
+	abstract @property uint sectorSize() const;
+	///
+	uint getSizeOfSector(uint sector) const
 	{
-		return _sectorsToWrite.length > 0;
+		enforceEx!InvalidSectorNumberException(
+			sector >= 1 && sector <= this.sectorCount,
+			format("Sector number out of bounds (%s/%s)",
+				sector, this.sectorCount));
+		return doGetSizeOfSector(sector);
 	}
-
-	final void commit()
-	{
-		// TODO: serialize
-		foreach (sector, data; _sectorsToWrite)
-			doWriteSector(sector, data);
-	}
-
-	final void rollback()
-	{
-		_sectorsToWrite.clear();
-	}
-
 	///
-	abstract uint getSectors();
+	abstract @property bool isWriteProtected() const;
 	///
-	abstract uint getSectorSize(uint sector = 0);
+	abstract @property void isWriteProtected(bool value);
 	///
-	abstract bool isWriteProtected();
-	///
-	abstract void setWriteProtected(bool value);
-	///
-	abstract string getType() const pure nothrow;
+	abstract @property string type() const;
 
 	///
 	final InputStream openBootLoader()
@@ -212,7 +244,7 @@ class XeDisk
 				size_t w;
 				while (w < buffer.length)
 				{
-					enforce(_sector <= _disk.getSectors(), "Disk full");
+					enforce(_sector <= _disk.sectorCount, "Disk full");
 					size_t toCopy = min(_secbuf.length - _offset, buffer.length - w);
 					_secbuf[_offset .. _offset + toCopy] = buffer[w .. w + toCopy];
 					w += toCopy;
@@ -235,6 +267,33 @@ class XeDisk
 		};
 	}
 
+	@property Percom percom()
+	{
+		Percom result;
+		result.sectorSize = ntobe(cast(ushort) sectorSize);
+		if ((sectorCount == 720 && sectorSize == 128)
+		 || (sectorCount == 1040 && sectorSize == 128)
+		 || (sectorCount == 720 && sectorSize == 256)
+		 || (sectorCount == 1440 && sectorSize == 256))
+		{
+			result.tracks = 40;
+			result.sides = sectorCount > 720 ? 2 : 1;
+			with (PercomFlags) result.flags =
+				(sectorCount == 720 && sectorSize == 128) ? FM : MFM;
+			result.sectorsPerTrack = ntobe(cast(ushort)
+				(sectorCount == 1040 ? 26 : 18));
+		}
+		else
+		{
+			result.tracks = 1;
+			result.flags = cast(PercomFlags)
+				(PercomFlags.MFM | PercomFlags.HardDisk);
+			result.sectorsPerTrack = ntobe(cast(ushort) sectorCount);
+			result.sectorsPerTrackHigh = getByte!2(sectorCount);
+		}
+		return result;
+	}
+
 protected:
 	XeDiskOpenMode _openMode;
 
@@ -242,17 +301,19 @@ protected:
 	abstract size_t doReadSector(uint sector, ubyte[] buffer);
 	///
 	abstract void doWriteSector(uint sector, in ubyte[] buffer);
+	///
+	abstract uint doGetSizeOfSector(uint sector) const;
 
 private:
 	struct TypeDelegates
 	{
-		XeDisk function(RandomAccessStream s, XeDiskOpenMode mode) tryOpen;
-		XeDisk function(RandomAccessStream s, uint totalSectors, uint bytesPerSector) doCreate;
+		DiskOpenFunc tryOpen;
+		DiskCreateFunc doCreate;
 	}
 
 	static Nullable!TypeDelegates[string] _types;
 
-	immutable(ubyte)[][uint] _sectorsToWrite;
+	immutable(ubyte)[][uint] _sectorCountToWrite;
 }
 
 unittest
@@ -298,15 +359,24 @@ unittest
 	assert (buf[6 .. $] == new ubyte[122]);
 }
 
+///
 class XePartition : XeDisk
 {
-	abstract ulong getPhysicalSectors();
-	abstract ulong getFirstSector();
+	///
+	abstract @property ulong physicalSectorCount() const;
+
+	///
+	abstract @property ulong firstPhysicalSector() const;
 }
 
+///
+alias XePartitionTable function(RandomAccessStream s) PartitionOpenFunc;
+
+///
 class XePartitionTable
 {
-	static XePartitionTable open(RandomAccessStream stream)
+	///
+	static XePartitionTable tryOpen(RandomAccessStream stream)
 	{
 		XePartitionTable[] found;
 		foreach (t; _types)
@@ -322,9 +392,15 @@ class XePartitionTable
 		return new MultiTable(found);
 	}
 
+	///
+	static XePartitionTable open(RandomAccessStream stream)
+	{
+		return enforce(tryOpen(stream),
+			"Disk does not contain a valid partition table");
+	}
+
 	protected static void registerType(
-		string type,
-		XePartitionTable function(RandomAccessStream s) tryOpen)
+		string type, PartitionOpenFunc tryOpen)
 	{
 		type = toUpper(type);
 		_types[type] = TypeDelegates(tryOpen);
@@ -332,12 +408,12 @@ class XePartitionTable
 	}
 
 	abstract ForwardRange!XePartition opSlice();
-	abstract string getType();
+	abstract @property string type() const;
 
 private:
 	struct TypeDelegates
 	{
-		XePartitionTable function(RandomAccessStream s) tryOpen;
+		PartitionOpenFunc tryOpen;
 	}
 
 	static Nullable!TypeDelegates[string] _types;
@@ -350,10 +426,10 @@ private class MultiTable : XePartitionTable
 		return inputRangeObject(_subtables.map!(pt => pt[])().joiner());
 	}
 
-	override string getType()
+	override @property string type() const
 	{
 		return "Combined(" ~
-			std.string.join(map!(pt => pt.getType())(_subtables), ", ") ~ ")";
+			std.string.join(map!(pt => pt.type)(_subtables), ", ") ~ ")";
 	}
 
 private:
@@ -365,10 +441,6 @@ private:
 	XePartitionTable[] _subtables;
 }
 
-import std.stdio;
-import xe.disk;
-import std.algorithm;
-
 private template TestImpl(string what)
 	if (what == "Disk" || what == "Partition")
 {
@@ -376,15 +448,15 @@ private template TestImpl(string what)
 
 	class TestImpl : BaseType
 	{
-		this(uint sectors, uint bytesPerSector, uint singleDensitySectors)
+		this(uint sectors, uint sectorSize, uint singleDensitySectors)
 		{
 			assert(sectors > 0);
 			assert(singleDensitySectors <= sectors);
 			_data = new ubyte[
-				(sectors - singleDensitySectors) * bytesPerSector
+				(sectors - singleDensitySectors) * sectorSize
 				+ singleDensitySectors * 128];
-			_sectors = sectors;
-			_bytesPerSector = bytesPerSector;
+			_sectorCount = sectors;
+			_sectorSize = sectorSize;
 			_singleDensitySectors = singleDensitySectors;
 			_openMode = XeDiskOpenMode.ReadWrite;
 		}
@@ -394,15 +466,15 @@ private template TestImpl(string what)
 			mixin(Test!("Test" ~ what ~ " (1)"));
 			auto d1 = new TestDisk(10, 256, 4);
 			assert(d1._data.length == 2048);
-			assert(d1._sectors == 10);
-			assert(d1._bytesPerSector == 256);
+			assert(d1._sectorCount == 10);
+			assert(d1._sectorSize == 256);
 			assert(d1._singleDensitySectors == 4);
 		}
 
 		/// Read contents of file from specified offset as a raw disk image
-		/// data interpreted according to the specified bytesPerSector and
+		/// data interpreted according to the specified sectorSize and
 		/// singleDensitySectors parameters.
-		this(string filename, ulong offset, uint bytesPerSector,
+		this(string filename, ulong offset, uint sectorSize,
 			uint singleDensitySectors)
 		{
 			auto f = File(filename);
@@ -410,11 +482,11 @@ private template TestImpl(string what)
 			foreach (ubyte[] buf; f.byChunk(16384))
 				_data ~= buf;
 			assert(_data.length >= singleDensitySectors * 128);
-			assert((_data.length - singleDensitySectors * 128) % bytesPerSector == 0,
-				text((_data.length - singleDensitySectors * 128) % bytesPerSector));
-			_sectors = cast(uint) (singleDensitySectors +
-				(_data.length - singleDensitySectors * 128) / bytesPerSector);
-			_bytesPerSector = bytesPerSector;
+			assert((_data.length - singleDensitySectors * 128) % sectorSize == 0,
+				text((_data.length - singleDensitySectors * 128) % sectorSize));
+			_sectorCount = cast(uint) (singleDensitySectors +
+				(_data.length - singleDensitySectors * 128) / sectorSize);
+			_sectorSize = sectorSize;
 			_singleDensitySectors = singleDensitySectors;
 			_openMode = XeDiskOpenMode.ReadWrite;
 		}
@@ -424,63 +496,67 @@ private template TestImpl(string what)
 			mixin(Test!("Test" ~ what ~ " (2)"));
 			auto d1 = new TestDisk("testfiles/epi.atr", 16, 512, 0);
 			assert(d1._data.length == 720 * 512);
-			assert(d1._sectors == 720);
-			assert(d1._bytesPerSector == 512);
+			assert(d1._sectorCount == 720);
+			assert(d1._sectorSize == 512);
 			assert(d1._singleDensitySectors == 0);
 		}
 
-		override uint getSectors() { return _sectors; }
+		override @property uint sectorCount() const { return _sectorCount; }
 
-		override uint getSectorSize(uint sector = 0)
-		{
-			return (sector == 0 || sector > _singleDensitySectors)
-				? _bytesPerSector : 128;
-		}
+		override @property uint sectorSize() const { return _sectorSize; }
 
-		override bool isWriteProtected() { return false; }
+		override @property bool isWriteProtected() const { return false; }
 
-		override void setWriteProtected(bool value)
+		override @property void isWriteProtected(bool value)
 		{
 			throw new Exception("Not implemented");
 		}
 
-		override string getType() const pure nothrow { return "TEST"; }
+		override @property string type() const { return "TEST"; }
 
 		static if (what == "Partition")
 		{
-			override ulong getPhysicalSectors() { return _sectors; }
-			override ulong getFirstSector() { return 1; }
+			override @property ulong physicalSectorCount() const
+			{
+				return _sectorCount;
+			}
+			override @property ulong firstPhysicalSector() { return 1; }
 		}
 
 	protected:
 		override size_t doReadSector(uint sector, ubyte[] buffer)
 		{
-			auto len = min(buffer.length, getSectorSize(sector));
-			auto pos = streamPosition(sector);
+			auto len = min(buffer.length, doGetSizeOfSector(sector));
+			auto pos = getOffsetOfSector(sector);
 			buffer[0 .. len] = _data[pos .. pos + len];
 			return len;
 		}
 
 		override void doWriteSector(uint sector, in ubyte[] buffer)
 		{
-			auto len = min(buffer.length, getSectorSize(sector));
-			auto pos = streamPosition(sector);
+			auto len = min(buffer.length, doGetSizeOfSector(sector));
+			auto pos = getOffsetOfSector(sector);
 			_data[pos .. pos + len] = buffer[0 .. len];
 		}
 
+		override uint doGetSizeOfSector(uint sector)
+		{
+			return sector > _singleDensitySectors ? _sectorSize : 128;
+		}
+
 	private:
-		uint streamPosition(uint sector)
+		uint getOffsetOfSector(uint sector)
 		{
 			if (sector > _singleDensitySectors)
 				return _singleDensitySectors * 128
-					+ (sector - _singleDensitySectors - 1) * _bytesPerSector;
+					+ (sector - _singleDensitySectors - 1) * _sectorSize;
 			else
 				return (sector - 1) * 128;
 		}
 
 		ubyte[] _data;
-		uint _sectors;
-		uint _bytesPerSector;
+		uint _sectorCount;
+		uint _sectorSize;
 		uint _singleDensitySectors;
 	}
 }
