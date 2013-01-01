@@ -26,12 +26,12 @@ TEST_MODULES := \
 	xedisk
 
 # sources
-src_lib_xebase := xe/streams.d xe/bytemanip.d xe/exception.d
+src_lib_xebase := xe/streams.d xe/bytemanip.d xe/exception.d \
+	xe/util.d
 src_lib_xedisk := xe/disk.d xe/disk_impl/all.d xe/disk_impl/atr.d \
 	xe/disk_impl/xfd.d xe/disk_impl/idea.d xe/disk_impl/msdos.d \
 	xe/fs.d xe/fs_impl/cache.d xe/fs_impl/vtoc.d xe/fs_impl/all.d \
 	xe/fs_impl/mydos.d xe/fs_impl/sparta.d xe/fs_impl/fat.d \
-	xe/util.d
 
 src_exe_xedisk := xedisk.d
 src_exe_efdisk := efdisk.d $(builddir)/getgeo.o
@@ -42,7 +42,9 @@ src_ddoc    := xe/streams.d xe/bytemanip.d xe/exception.d xe/disk.d xe/fs.d \
 src_efdisk  := efdisk.d xe/bytemanip.d getgeo.o
 
 # include rules for target OS
+ifeq (,$(OS))
 OS := $(shell uname)
+endif
 ifneq (,$(findstring Windows,$(OS)))
 	include win32.mk
 else
