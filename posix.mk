@@ -35,6 +35,14 @@ white  := $(shell echo `tput sgr0`)
 green  := $(shell echo `tput bold && tput setf 2`)
 red    := $(shell echo `tput bold && tput setf 4`)
 
+#
+
+do_dmd_exe  = @echo " DMD   $@" && mkdir -p $(dir $@) && $(DMD) $(DFLAGS) -of$@
+do_dmd_lib  = @echo " DMD   $@" && mkdir -p $(dir $@) && $(DMD) $(DFLAGS) -of$@ -lib
+do_cc       = @echo " CC    $@" && mkdir -p $(dir $@) && $(CC) $(CFLAGS) -o $@ -c
+do_ccld_exe = @echo " CCLD  $@" && mkdir -p $(dir $@) && $(CC) $(CFLAGS) -o $@
+do_cp       = @echo " CP    $@" && mkdir -p $(dir $@) && cp $< $@
+
 ################################################################################
 # Rules begin here
 ################################################################################
@@ -58,48 +66,38 @@ else
 $(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(LIB_CXEDISK) $(LIB_DTOC) $(EXE_XEDISK) $(EXE_EFDISK) $(EXE_XEFUSE)
 unittest : $(addprefix $(builddir)/unittest/,$(TEST_MODULES))
 endif
+.PHONY: release debug unittest
 
-$(EXE_XEDISK): $(src_exe_xedisk) $(LIB_XEBASE) $(LIB_XEDISK)
-	@echo " DMD   $@"
-	@$(DMD) $(DFLAGS) -of$@ $(src_exe_xedisk) $(LIB_XEDISK) $(LIB_XEBASE)
+$(EXE_XEDISK): $(src_exe_xedisk) $(LIB_XEDISK) $(LIB_XEBASE)
+	$(do_dmd_exe) $^
 
 $(EXE_EFDISK): $(src_exe_efdisk) $(LIB_XEBASE)
-	@echo " DMD   $@"
-	@$(DMD) $(DFLAGS) -of$@ $(src_exe_efdisk) $(LIB_XEBASE)
+	$(do_dmd_exe) $^
 
 $(LIB_XEBASE): $(src_lib_xebase)
-	@echo " DMD   $@"
-	@$(DMD) $(DFLAGS) -lib -of$@ $(src_lib_xebase)
+	$(do_dmd_lib) $^
 
 $(LIB_XEDISK): $(src_lib_xedisk) $(src_lib_xebase)
-	@echo " DMD   $@"
-	@$(DMD) $(DFLAGS) -lib -of$@ $(src_lib_xedisk)
+	$(do_dmd_lib) $(src_lib_xedisk)
 
 $(LIB_CXEDISK): c/c_api.d $(builddir)/c/c_init.o $(src_lib_xedisk) $(src_lib_xebase)
-	@echo " DMD   $@"
-	@$(DMD) $(DFLAGS) -lib -of$@ $^
+	$(do_dmd_lib) $^
 
 $(LIB_DTOC): $(builddir)/emptymain.d
-	@echo " DMD   $@"
-	@$(DMD) $(DFLAGS) -lib -of$@ $^
+	$(do_dmd_lib) $^
 
 $(EXE_XEFUSE): fuse/xefuse.c $(LIB_CXEDISK) $(LIB_DTOC) c/xe/stream.h c/xe/disk.h c/xe/fs.h
-	@echo " CC    $@"
-	@$(CC) $(CFLAGS) -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=22 -Ic \
-		fuse/xefuse.c -o $@ \
-		-L$(builddir) -lfuse -lcxedisk -lphobos2 -lpthread -lrt -ldtoc
+	$(do_ccld_exe) -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=22 -Ic \
+		$< -L$(builddir) -lfuse -lcxedisk -lphobos2 -lpthread -lrt -ldtoc
 
 c/examples/libcxedisk.a: $(LIB_CXEDISK)
-	@echo " CP    $@"
-	@cp $< $@
+	$(do_cp)
 
 c/examples/libdtoc.a: $(LIB_DTOC)
-	@echo " CP    $@"
-	@cp $< $@
+	$(do_cp)
 
 $(builddir)/%.o : %.c
-	@echo " CC    $@"
-	@mkdir -p `dirname "$@"` && $(CC) $(CFLAGS) -c $< -o $@
+	$(do_cc) $<
 
 $(addprefix $(builddir)/unittest/,$(DISABLED_TESTS)) :
 	@echo Testing $@ - disabled
@@ -116,13 +114,10 @@ $(builddir)/emptymain.d :
 CLEAN += *emptymain.lst
 
 doc: $(src_ddoc) xedisk_manual.html
-	$(DMD) $(DFLAGS_DDOC) $(src_ddoc)
-	sed -i -e 's/<big>abstract /<big>/' ddoc/*.html
+	@echo " DOC"
+	@$(DMD) $(DFLAGS_DDOC) $(src_ddoc)
+	@sed -i -e 's/<big>abstract /<big>/' ddoc/*.html
 .PHONY: doc
 CLEAN += ddoc/*.html
 
 CLEAN += build
-
-.PHONY: release debug unittest clean
-
-.DELETE_ON_ERROR:
