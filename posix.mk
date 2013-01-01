@@ -3,19 +3,28 @@
 # Set CFLAGS and DFLAGS
 CFLAGS += -Wall
 DFLAGS += -w -property
-ifeq ($(BUILD),debug)
+
+ifneq (,$(findstring debug,$(BUILD)))
 	CFLAGS += -g
 	DFLAGS += -g -debug
 else
-	CFLAGS += -O3
-	DFLAGS += -O -release -inline
+	ifneq (,$(findstring release,$(BUILD)))
+		CFLAGS += -O3
+		DFLAGS += -O -release -inline
+	endif
 endif
 
 DFLAGS += -Jdos
 DFLAGS_DDOC = -o- -Ddddoc
 
-DMD := dmd
-CC  := gcc
+CROSS_COMPILE :=
+ifneq (,$(CROSS_COMPILE))
+DMD           := $(CROSS_COMPILE)gdmd
+else
+DMD           := dmd
+endif
+CC            := $(CROSS_COMPILE)gcc
+
 RM  := rm -f
 
 RUN := ./
@@ -35,7 +44,7 @@ white  := $(shell echo `tput sgr0`)
 green  := $(shell echo `tput bold && tput setf 2`)
 red    := $(shell echo `tput bold && tput setf 4`)
 
-#
+# commands
 
 do_dmd_exe  = @echo " DMD   $@" && mkdir -p $(dir $@) && $(DMD) $(DFLAGS) -of$@
 do_dmd_lib  = @echo " DMD   $@" && mkdir -p $(dir $@) && $(DMD) $(DFLAGS) -of$@ -lib
@@ -56,6 +65,10 @@ release :
 	@$(MAKE) --no-print-directory OS=$(OS) BUILD=release
 debug :
 	@$(MAKE) --no-print-directory OS=$(OS) BUILD=debug
+rpi-release :
+	@$(MAKE) --no-print-directory OS=linux BUILD=rpi/release CROSS_COMPILE=arm-linux-gnueabihf- EXE_XEFUSE=
+rpi-debug :
+	@$(MAKE) --no-print-directory OS=linux BUILD=rpi/debug CROSS_COMPILE=arm-linux-gnueabihf- EXE_XEFUSE=
 unittest :
 	@$(MAKE) --no-print-directory OS=$(OS) BUILD=debug unittest
 	@$(MAKE) --no-print-directory OS=$(OS) BUILD=release unittest
