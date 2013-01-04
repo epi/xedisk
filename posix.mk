@@ -37,6 +37,7 @@ EXE_EFDISK  := $(builddir)/efdisk
 LIB_CXEDISK := $(builddir)/libcxedisk.a
 LIB_DTOC    := $(builddir)/libdtoc.a
 EXE_XEFUSE  := $(builddir)/xefuse
+EXE_XEDRIVE := $(builddir)/xedrive/xedrive
 
 # fancy formatting
 yellow := $(shell echo `tput bold && tput setf 6`)
@@ -76,7 +77,7 @@ else
 # This branch is normally taken in recursive builds. All we need to do
 # is set the default build to $(BUILD) (which is either debug or
 # release) and then let the unittest depend on that build's unittests.
-$(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(LIB_CXEDISK) $(LIB_DTOC) $(EXE_XEDISK) $(EXE_EFDISK) $(EXE_XEFUSE)
+$(BUILD) : $(LIB_XEBASE) $(LIB_XEDISK) $(LIB_CXEDISK) $(LIB_DTOC) $(EXE_XEDISK) $(EXE_EFDISK) $(EXE_XEFUSE) $(EXE_XEDRIVE)
 unittest : $(addprefix $(builddir)/unittest/,$(TEST_MODULES))
 endif
 .PHONY: release debug unittest
@@ -102,6 +103,9 @@ $(LIB_DTOC): $(builddir)/emptymain.d
 $(EXE_XEFUSE): fuse/xefuse.c $(LIB_CXEDISK) $(LIB_DTOC) c/xe/stream.h c/xe/disk.h c/xe/fs.h
 	$(do_ccld_exe) -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=22 -Ic \
 		$< -L$(builddir) -lfuse -lcxedisk -lphobos2 -lpthread -lrt -ldtoc
+
+$(EXE_XEDRIVE): $(src_exe_xedrive)
+	$(do_dmd_exe) $^
 
 c/examples/libcxedisk.a: $(LIB_CXEDISK)
 	$(do_cp)

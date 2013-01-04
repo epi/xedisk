@@ -35,6 +35,9 @@ src_lib_xedisk := xe/disk.d xe/disk_impl/all.d xe/disk_impl/atr.d \
 
 src_exe_xedisk := xedisk.d
 src_exe_efdisk := efdisk.d $(builddir)/getgeo.o
+src_exe_xedrive := xedrive/xedrive.d xedrive/serial.d xedrive/disk.d \
+	xedrive/siodevice.d xedrive/sioserver.d \
+	$(builddir)/xedrive/serial_c.o
 
 src_ddoc    := xe/streams.d xe/bytemanip.d xe/exception.d xe/disk.d xe/fs.d \
 	xe/fs_impl/cache.d xedisk.ddoc
