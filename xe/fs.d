@@ -50,6 +50,8 @@ mixin(CTFEGenerateExceptionClass("DirectoryFullException", 169,
 	"Directory full"));
 mixin(CTFEGenerateExceptionClass("FileNotFoundException", 170,
 	"File not found"));
+mixin(CTFEGenerateExceptionClass("FileSystemCorruptException", 181,
+	"File system is corrupt"));
 
 ///
 class XeEntry
@@ -146,7 +148,7 @@ class XeFile : XeEntry
 /// Directory spanning policy for XeDirectory.enumerate()
 enum XeSpanMode
 {
-	/// Do not descend into subdirectories
+	/// Do not descend into subdirectories.
 	Shallow,
 	/// _Depth first, i.e. the content of any subdirectory is spanned
 	/// before that subdirectory itself.
@@ -160,9 +162,34 @@ enum XeSpanMode
 ///
 class XeDirectory : XeEntry
 {
+	/// Create a new file in this directory.
 	///
+	/// Params: name = _name of the file to be created.
+	///
+	/// Returns: An OutputStream object allowing writing to the file.
+	///
+	/// Throws:
+	/// FileExistsException if an entry with the same _name already
+	/// exists and cannot be overwritten.<br/>
+	/// DirectoryFullException if there is no space for a new file entry
+	/// in the directory.
+	///
+	/// See_Also: createDirectory()
 	abstract OutputStream createFile(string name); // or should it return XeFile?
+
+	/// Create a new subdirectory in this directory.
 	///
+	/// Params: name = _name of the directory to be created.
+	///
+	/// Returns: An XeDirectory object representing the created subdirectory.
+	///
+	/// Throws:
+	/// FileExistsException if an entry with the same _name already
+	/// exists and cannot be overwritten.<br/>
+	/// DirectoryFullException if there is no space for a new file entry
+	/// in the directory.
+	///
+	/// See_Also: createFile()
 	abstract XeDirectory createDirectory(string name);
 
 	private static struct Iterator
@@ -200,7 +227,22 @@ class XeDirectory : XeEntry
 		private XeSpanMode _spanMode;
 	}
 
-	/// Returns a range that can be iterated over using foreach
+	/// Returns an object providing foreach iteration over the contents
+	/// of the directory and, optionally, its subdirectories. The iteration
+	/// variable is of type XeEntry.
+	///
+	/// Params: spanMode = Whether the directory's subdirectories should be
+	///                    iterated over depth-first (depth), breadth-first
+	///                    (breadth), or not at all (shallow).
+	///
+	/// Examples:
+	/// -------------------------------------------
+	/// auto rootDir = fs.getRootDirectory();
+	/// foreach (entry; rootDir.enumerate())
+	///   writefln("%-20s%10s", entry.getName(), entry.getSize());
+	/// -------------------------------------------
+	///
+	/// See_Also: XeEntry, find()
 	final auto enumerate(XeSpanMode spanMode = XeSpanMode.Shallow)
 	{
 		return Iterator(this, spanMode);
