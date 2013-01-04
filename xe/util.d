@@ -1,6 +1,7 @@
 module xe.util;
 
 import std.exception;
+import core.exception;
 
 version(unittest)
 {
@@ -14,7 +15,7 @@ C caseWhen(A, B, C, T...)(A value, lazy B toCompare, lazy C resultIfEqual, lazy 
 	else
 	{
 		static if (other.length == 0)
-			throw new Exception("No match");
+			throw new SwitchError("caseWhen(): no match");
 		else static if (other.length == 1)
 			return other[0];
 		else
@@ -33,7 +34,7 @@ unittest
 			2, "two",
 			3, "three",
 			4, "four") == numbers[i]);
-		assertThrown(caseWhen(i, 6, "six"));
+		assertThrown!SwitchError(caseWhen(i, 6, "six"));
 	}
 	assert (caseWhen(1, 6, "six", "default") == "default");
 }
