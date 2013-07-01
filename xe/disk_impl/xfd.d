@@ -62,7 +62,7 @@ protected:
 		_stream.write(getOffsetOfSector(sector), buffer[0 .. len]);
 	}
 
-	override uint doGetSizeOfSector(uint sector)
+	override uint doGetSizeOfSector(uint sector) const
 	{
 		return sector > 3 ? _sectorSize : 128;
 	}

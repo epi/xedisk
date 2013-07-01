@@ -86,7 +86,7 @@ protected:
 		_stream.write(streamPosition(sector), buffer[0 .. len]);
 	}
 
-	override uint doGetSizeOfSector(uint sector)
+	override uint doGetSizeOfSector(uint sector) const
 	{
 		if (_pi.clsize == PartitionSectorSize.B256)
 			return sector > 3 ? 256 : 128;
