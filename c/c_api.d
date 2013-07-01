@@ -440,8 +440,10 @@ int XeEntry_IsDirectory(CXeEntry* centry)
 	try
 		return centry.impl.isDirectory();
 	catch (Exception e)
+	{
 		setLastException(e.msg);
-	return ulong.max;
+		return int.min;
+	}
 }
 
 export extern (C)
@@ -451,8 +453,10 @@ int XeEntry_IsFile(CXeEntry* centry)
 	try
 		return centry.impl.isFile();
 	catch (Exception e)
+	{
 		setLastException(e.msg);
-	return ulong.max;
+		return int.min;
+	}
 }
 
 export extern (C)
