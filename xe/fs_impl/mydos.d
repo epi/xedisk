@@ -596,7 +596,7 @@ private final class MydosFile : XeFile
 				{
 					uint f = _r.front[$ - 1];
 					size_t toRead = min(buffer.length - read, f - _sectorOffset);
-					buffer[read .. read + toRead] = _r.front[0 .. toRead];
+					buffer[read .. read + toRead] = _r.front[0 .. toRead][];
 					if ((_sectorOffset += toRead) >= f)
 					{
 						_sectorOffset = 0;

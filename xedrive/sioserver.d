@@ -78,7 +78,7 @@ private:
 		while (checksum(buffer[0 .. 4]) != buffer[4])
 		{
 			ubyte[4] temp = buffer[1 .. 5];
-			buffer[0 .. 4] = temp;
+			buffer[0 .. 4] = temp[];
 			while (_port.read(buffer[4 .. 5]) < 1) {}
 		}
 		return SioCommand(buffer[0], buffer[1], buffer[2], buffer[3]);

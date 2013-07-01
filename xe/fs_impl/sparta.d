@@ -266,7 +266,7 @@ private struct RawStream
 			}
 			auto sec = _cmi._cache.request(_cmi.current);
 			auto toRead = min(buf.length - r, clusterSize - _offset);
-			buf[r .. r + toRead] = sec[_offset .. _offset + toRead];
+			buf[r .. r + toRead] = sec[_offset .. _offset + toRead][];
 			r += toRead;
 			_offset += toRead;
 		}
@@ -612,7 +612,7 @@ private:
 
 	static SpartaFileSystem tryOpen(XeDisk disk)
 	{
-		auto bps = disk.getSectorSize(4);
+		auto bps = disk.getSizeOfSector(4);
 		if (bps != 128 && bps != 256 && bps != 512)
 			return null;
 
