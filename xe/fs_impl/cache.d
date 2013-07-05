@@ -27,8 +27,9 @@ along with xedisk.  If not, see <http://www.gnu.org/licenses/>.
 module xe.fs_impl.cache;
 
 debug import std.stdio;
-import std.exception;
 import std.algorithm;
+import std.bitmanip;
+import std.exception;
 import std.system;
 import std.traits;
 import std.typecons;
@@ -89,23 +90,20 @@ struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == st
 
 	T get(T)(size_t index) const
 	{
-		assert (_impl);
-		ubyte[T.sizeof] tmp = _impl._data[index .. index + T.sizeof][];
-		static if (en == Endian.littleEndian)
-			return leton!T(tmp);
-		else static if (en == Endian.bigEndian)
-			return beton!T(tmp);
-		else static assert(false);
+		assert(_impl);
+		return _impl._data.peek!(T, en)(index);
+	}
+
+	T peek(T, Endian en)(size_t index) const
+	{
+		assert(_impl);
+		return _impl._data.peek!(T, en)(index);
 	}
 
 	void put(T)(size_t index, T val)
 	{
-		assert (_impl);
-		static if (en == Endian.littleEndian)
-			_impl._data[index .. index + T.sizeof] = ntole(val);
-		else static if (en == Endian.bigEndian)
-			_impl._data[index .. index + T.sizeof] = ntobe(val);
-		else static assert(false);
+		assert(_impl);
+		_impl._data.write!(T, en)(val, index);
 		_impl._dirty = true;
 	}
 
