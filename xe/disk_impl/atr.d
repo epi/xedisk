@@ -146,7 +146,7 @@ protected:
 		_stream.write(offset, buffer[0 .. len]);
 	}
 
-	override uint doGetSizeOfSector(uint sector)
+	override uint doGetSizeOfSector(uint sector) const
 	{
 		ulong offset;
 		uint size;

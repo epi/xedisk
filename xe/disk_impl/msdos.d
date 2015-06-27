@@ -54,9 +54,9 @@ class MsdosPartition : XePartition
 		return "MS-DOS partition (" ~ _typeString ~ ")";
 	}
 
-	override @property ulong physicalSectorCount() { return _entry.sectors; }
+	override @property ulong physicalSectorCount() const { return _entry.sectors; }
 
-	override @property ulong firstPhysicalSector() { return _entry.lbaFirst; }
+	override @property ulong firstPhysicalSector() const { return _entry.lbaFirst; }
 
 protected:
 	override size_t doReadSector(uint sector, ubyte[] buffer)
@@ -71,7 +71,7 @@ protected:
 		_stream.write(streamPosition(sector), buffer[0 .. len]);
 	}
 
-	override uint doGetSizeOfSector(uint sector) { return 512; }
+	override uint doGetSizeOfSector(uint sector) const { return 512; }
 
 private:
 	this(RandomAccessStream st, PartitionEntry entry)

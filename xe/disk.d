@@ -520,7 +520,7 @@ private template TestImpl(string what)
 			{
 				return _sectorCount;
 			}
-			override @property ulong firstPhysicalSector() { return 1; }
+			override @property ulong firstPhysicalSector() const { return 1; }
 		}
 
 	protected:
@@ -539,7 +539,7 @@ private template TestImpl(string what)
 			_data[pos .. pos + len] = buffer[0 .. len];
 		}
 
-		override uint doGetSizeOfSector(uint sector)
+		override uint doGetSizeOfSector(uint sector) const
 		{
 			return sector > _singleDensitySectors ? _sectorSize : 128;
 		}
