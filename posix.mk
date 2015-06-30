@@ -2,7 +2,7 @@
 
 # Set CFLAGS and DFLAGS
 CFLAGS += -Wall
-DFLAGS += -w -property
+DFLAGS += -w
 
 ifneq (,$(findstring debug,$(BUILD)))
 	CFLAGS += -g

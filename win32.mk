@@ -7,7 +7,7 @@ ifeq ($(BUILD),debug)
 else
 	DFLAGS += -O -release -inline
 endif
-DFLAGS     += -w -property -Jdos
+DFLAGS     += -w -Jdos
 DFLAGS_DDOC = -o- -Ddddoc
 CFLAGS     += -o$@
 
