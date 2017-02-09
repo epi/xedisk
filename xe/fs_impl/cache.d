@@ -165,7 +165,7 @@ struct StructuredCachedSector(S, Endian en = Endian.littleEndian) if (is(S == st
 				"Get field forwarding not supported for type `" ~ FT.stringof ~ "'");
 		}
 
-		void opAssign(ref S rhs)
+		void opAssign(S rhs)
 		{
 			foreach (field; __traits(allMembers, S))
 			{
@@ -233,7 +233,7 @@ final class SectorCache
 			{
 				auto next = centry._next;
 				assert (centry._refs == 1);
-				clear(*centry);
+				destroy(*centry);
 				centry = next;
 			}
 		}

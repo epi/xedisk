@@ -3,7 +3,7 @@ module xe.test;
 public import std.stdio;
 import std.exception;
 import std.typecons;
-import std.c.stdlib;
+import core.stdc.stdlib;
 
 template Test(string s)
 {

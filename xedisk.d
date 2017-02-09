@@ -75,10 +75,10 @@ struct ScopedHandles
 {
 	~this()
 	{
-		if (fs) { clear(fs); fs = null; }
-		if (disk) { clear(disk); disk = null; }
-		if (table) { clear(table); table = null; }
-		if (stream) { clear(stream); stream = null; }
+		if (fs) { destroy(fs); fs = null; }
+		if (disk) { destroy(disk); disk = null; }
+		if (table) { destroy(table); table = null; }
+		if (stream) { destroy(stream); stream = null; }
 		file.close();
 	}
 
@@ -864,8 +864,10 @@ int xedisk_main(string[] args)
 			"--help":&printHelp
 			];
 		auto fun = funcs.get(args[1], null);
-		if (fun !is null)
-			return fun(args), 0;
+		if (fun !is null) {
+			fun(args);
+			return 0;
+		}
 	}
 	throw new XeException(format("Missing command. Try `%s help'", args[0]));
 }
