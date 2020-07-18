@@ -21,6 +21,7 @@ along with xedisk.  If not, see <http://www.gnu.org/licenses/>.
 module xe.fs_impl.mydos;
 
 debug import std.stdio;
+import std.ascii;
 import std.exception;
 import std.typecons;
 import std.datetime;
@@ -861,7 +862,7 @@ class MydosFileSystem : XeFileSystem
 	body
 	{
 		name = name.toLower().tr("a-z0-9@.", "_", "sc");
-		if (name[0].inPattern("0-9"))
+		if (isDigit(name[0]))
 			name = "@" ~ name;
 		auto com = regex(r"^([^.]{1,8})[^.]*(\..{0,3})?.*$");
 		return replace(name, com, "$1$2");
