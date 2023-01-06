@@ -457,13 +457,16 @@ void add(string[] args)
 	enforce(args.length >= 4, format(
 		"Missing arguments. Try `%s help add'.", args[0]));
 
-	scope stream = new FileStream(File(args[2], "r+b"));
-	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadWrite);
-	scope fs = XeFileSystem.open(disk);
-
-	scope dir = enforce(
+	auto stream = new FileStream(File(args[2], "r+b"));
+	scope(exit) destroy(stream);
+	auto disk = XeDisk.open(stream, XeDiskOpenMode.ReadWrite);
+	scope(exit) destroy(disk);
+	auto fs = XeFileSystem.open(disk);
+	scope(exit) destroy(fs);
+	auto dir = enforce(
 		cast(XeDirectory) fs.getRootDirectory().find(destDir),
 		format("`%s' is not a directory", destDir));
+	scope(exit) destroy(dir);
 
 	string makeSureNameIsValid(string name)
 	{
@@ -773,10 +776,13 @@ void writeDos(string[] args)
 
 	enforce(args.length >= 3, format(
 		"Missing arguments. Try `%s help write-dos'.", args[0]));
-	scope stream = new FileStream(File(args[2], "r+b"));
-	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadWrite);
-	scope fs = XeFileSystem.open(disk);
 
+	auto stream = new FileStream(File(args[2], "r+b"));
+	scope(exit) destroy(stream);
+	auto disk = XeDisk.open(stream, XeDiskOpenMode.ReadWrite);
+	scope(exit) destroy(disk);
+	auto fs = XeFileSystem.open(disk);
+	scope(exit) destroy(fs);
 	fs.writeDosFiles(dosVersion);
 }
 
