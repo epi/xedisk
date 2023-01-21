@@ -53,7 +53,7 @@ class " ~ name ~ " : XeException
 {
 	this(string msg" ~ (defaultString.length
 		? " = \"" ~ defaultString ~ "\""
-		: "") ~ ", string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+		: "") ~ ", string file = __FILE__, size_t line = __LINE__, Exception next = null)
 	{
 		super(msg, " ~ to!string(errorCode) ~ ", file, line, next);
 	}}";

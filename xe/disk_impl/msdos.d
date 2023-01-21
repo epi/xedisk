@@ -88,9 +88,9 @@ private:
 	}
 
 	static immutable(string[ubyte]) _partitionTypeStrings;
-	static this()
+	shared static this()
 	{
-		_partitionTypeStrings = [
+		string[ubyte] tmp = [
 			0x01: "DOS 12-bit FAT",
 			0x04: "DOS 3.0+ 16-bit FAT (up to 32M)",
 			0x05: "DOS 3.3+ Extended Partition",
@@ -107,6 +107,7 @@ private:
 			0x83: "Linux native partition",
 			0x85: "Linux extended partition"
 		];
+		_partitionTypeStrings = tmp.assumeUnique;
 	}
 
 	RandomAccessStream _stream;

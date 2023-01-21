@@ -93,8 +93,8 @@ class XeDisk
 	static XeDisk create(RandomAccessStream stream, string type,
 		uint sectorCount, uint sectorSize)
 	{
-		auto td = _types.get(toUpper(type), Nullable!TypeDelegates());
-		enforce(!td.isNull(), format("Unknown disk type `%s'", type));
+		auto td = _types.get(toUpper(type), TypeDelegates.init);
+		enforce(td.doCreate !is null, format("Unknown disk type `%s'", type));
 		auto disk = td.doCreate(stream, sectorCount, sectorSize);
 		disk._openMode = XeDiskOpenMode.ReadWrite;
 		return disk;
@@ -105,7 +105,7 @@ class XeDisk
 	{
 		foreach (type, td; _types)
 		{
-			auto disk = td.get().tryOpen(stream, mode);
+			auto disk = td.tryOpen(stream, mode);
 			if (disk !is null)
 				return disk;
 		}
@@ -130,7 +130,7 @@ class XeDisk
 	///
 	final size_t readSector(uint sector, ubyte[] buffer)
 	{
-		enforceEx!InvalidSectorNumberException(
+		enforce!InvalidSectorNumberException(
 			sector >= 1 && sector <= this.sectorCount,
 			format("Sector number out of bounds (%s/%s)",
 				sector, this.sectorCount));
@@ -145,13 +145,13 @@ class XeDisk
 	///
 	final void writeSector(uint sector, ubyte[] buffer)
 	{
-		enforceEx!InvalidSectorNumberException(
+		enforce!InvalidSectorNumberException(
 			sector >= 1 && sector <= this.sectorCount,
 			format("Sector number out of bounds (%s/%s)",
 				sector, this.sectorCount));
-		enforceEx!DiskReadOnlyException(_openMode != XeDiskOpenMode.ReadOnly,
+		enforce!DiskReadOnlyException(_openMode != XeDiskOpenMode.ReadOnly,
 			"Attempted to write to a disk opened read-only");
-		enforceEx!DiskReadOnlyException(!isWriteProtected,
+		enforce!DiskReadOnlyException(!isWriteProtected,
 			"Attempted to write to a write-protected disk");
 		if (_openMode == XeDiskOpenMode.ReadWriteDeferred)
 			assert(false);
@@ -167,7 +167,7 @@ class XeDisk
 	///
 	uint getSizeOfSector(uint sector) const
 	{
-		enforceEx!InvalidSectorNumberException(
+		enforce!InvalidSectorNumberException(
 			sector >= 1 && sector <= this.sectorCount,
 			format("Sector number out of bounds (%s/%s)",
 				sector, this.sectorCount));
@@ -311,7 +311,7 @@ private:
 		DiskCreateFunc doCreate;
 	}
 
-	static Nullable!TypeDelegates[string] _types;
+	static TypeDelegates[string] _types;
 
 	immutable(ubyte)[][uint] _sectorCountToWrite;
 }
@@ -416,7 +416,7 @@ private:
 		PartitionOpenFunc tryOpen;
 	}
 
-	static Nullable!TypeDelegates[string] _types;
+	static TypeDelegates[string] _types;
 }
 
 private class MultiTable : XePartitionTable

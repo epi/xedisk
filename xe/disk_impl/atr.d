@@ -23,6 +23,7 @@ module xe.disk_impl.atr;
 import std.exception;
 import std.algorithm;
 import std.bitmanip;
+import std.typecons : BitFlags;
 import std.range;
 import xe.disk;
 import xe.streams;
@@ -73,12 +74,12 @@ align(1):
 		{
 			ubyte[4] crc32;
 			ubyte[4] _apeUnused;
-			ApeFlags apeFlags;
+			BitFlags!ApeFlags apeFlags;
 		}
 		struct
 		{
 			ubyte sio2pcParsHigh;
-			Sio2pcFlags sio2pcFlags;
+			BitFlags!Sio2pcFlags sio2pcFlags;
 			ubyte[2] firstBadSector;
 			ubyte[5] _unused;
 		}
@@ -118,10 +119,11 @@ class AtrDisk : XeDisk
 			"EOF while reading ATR header");
 		auto oldFlags = _apeFlags;
 		scope(failure) _apeFlags = oldFlags;
+		header.apeFlags = _apeFlags;
 		if (value)
-			header.apeFlags = _apeFlags |= ApeFlags.WriteProtected;
+			header.apeFlags |= ApeFlags.WriteProtected;
 		else
-			header.apeFlags = _apeFlags &= ~ApeFlags.WriteProtected;
+			header.apeFlags &= ~BitFlags!ApeFlags(ApeFlags.WriteProtected);
 		_stream.write(0, header.raw);
 	}
 
@@ -157,7 +159,8 @@ protected:
 private:
 	this(RandomAccessStream stream, uint sectorCount, uint sectorSize,
 		BootSectorLayout bootSectorLayout,
-		Sio2pcFlags sio2pcFlags, ApeFlags apeFlags, XeDiskOpenMode mode)
+		BitFlags!Sio2pcFlags sio2pcFlags,
+		BitFlags!ApeFlags apeFlags, XeDiskOpenMode mode)
 	{
 		_stream = stream;
 		_sectorCount = sectorCount;
@@ -411,8 +414,8 @@ private:
 		stream.write(0, header.raw);
 		stream.write(header.sizeof + size - 1, cast(ubyte[]) [ 0 ]);
 		return new AtrDisk(stream, sectorCount, sectorSize,
-			bootSectorLayout, cast(Sio2pcFlags) 0, cast(ApeFlags) 0,
-			XeDiskOpenMode.ReadWrite);
+			bootSectorLayout, BitFlags!Sio2pcFlags.init,
+			BitFlags!ApeFlags.init, XeDiskOpenMode.ReadWrite);
 	}
 
 	unittest
@@ -443,6 +446,6 @@ private:
 	uint _sectorCount;
 	uint _sectorSize;
 	BootSectorLayout _bootSectorLayout;
-	ApeFlags _apeFlags;
-	Sio2pcFlags _sio2pcFlags;
+	BitFlags!ApeFlags _apeFlags;
+	BitFlags!Sio2pcFlags _sio2pcFlags;
 }

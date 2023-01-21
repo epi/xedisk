@@ -122,7 +122,7 @@ class XeFile : XeEntry
 	abstract InputStream openReadOnly();
 	///
 	abstract OutputStream openWriteOnly(bool append = false);
-	
+
 	///
 	version (xedisk_V2)
 	{
@@ -378,10 +378,10 @@ class XeFileSystem
 	///
 	static XeFileSystem create(XeDisk disk, string type)
 	{
-		auto td = types_.get(toUpper(type), Nullable!TypeDelegates());
-		if (td.isNull())
+		auto doCreate = types_.get(toUpper(type), TypeDelegates.init).doCreate;
+		if (!doCreate)
 			throw new XeException("Unknown file system type " ~ type, 156);
-		return td.doCreate(disk);
+		return doCreate(disk);
 	}
 
 	/// Detects file system automatically. Throws if cannot recognize.
@@ -389,7 +389,7 @@ class XeFileSystem
 	{
 		foreach (type, td; types_)
 		{
-			auto fs = td.get().tryOpen(disk);
+			auto fs = td.tryOpen(disk);
 			if (fs !is null)
 				return fs;
 		}
@@ -431,10 +431,10 @@ class XeFileSystem
 	/// Returns: range that can be iterated over using foreach.
 	final auto listDirectory(string path, string mask)
 	{
-		auto ent = enforceEx!PathNotFoundException(
+		auto ent = enforce!PathNotFoundException(
 			getRootDirectory().find(path),
 			format("Directory `%s' not found", path));
-		enforceEx!PathNotFoundException(ent.isDirectory(),
+		enforce!PathNotFoundException(ent.isDirectory(),
 			format("`%s' is not a directory", path));
 
 		static struct Iterator
@@ -462,5 +462,5 @@ private:
 		XeFileSystem function(XeDisk disk) doCreate;
 	}
 
-	static Nullable!TypeDelegates[string] types_;
+	static TypeDelegates[string] types_;
 }

@@ -30,6 +30,7 @@ import std.bitmanip;
 import std.regex;
 import std.conv;
 import std.algorithm;
+import std.ascii;
 import xe.disk;
 import xe.fs;
 import xe.fs_impl.vtoc;
@@ -237,7 +238,7 @@ private mixin template ImplementRegularEntry()
 	override string getName() { return unformatFileName(_entry.name); }
 	override void rename(string newName)
 	{
-		enforce (!isReadOnly(), format("Cannot rename read only file `%s'", getName()));
+		enforce(!isReadOnly(), format("Cannot rename read only file `%s'", getName()));
 		_entry.name = formatFileName(newName);
 	}
 	override uint getSectors() { return _entry.sectors; }
@@ -861,7 +862,7 @@ class MydosFileSystem : XeFileSystem
 	body
 	{
 		name = name.toLower().tr("a-z0-9@.", "_", "sc");
-		if (name[0].inPattern("0-9"))
+		if (name[0].isDigit)
 			name = "@" ~ name;
 		auto com = regex(r"^([^.]{1,8})[^.]*(\..{0,3})?.*$");
 		return replace(name, com, "$1$2");
