@@ -457,7 +457,7 @@ void add(string[] args)
 	enforce(args.length >= 4, format(
 		"Missing arguments. Try `%s help add'.", args[0]));
 
-	scope stream = new FileStream(File(args[2], "r+b"));
+	FileStream stream = new FileStream(File(args[2], "r+b"));
 	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadWrite);
 	scope fs = XeFileSystem.open(disk);
 
