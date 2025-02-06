@@ -773,7 +773,7 @@ void writeDos(string[] args)
 
 	enforce(args.length >= 3, format(
 		"Missing arguments. Try `%s help write-dos'.", args[0]));
-	scope stream = new FileStream(File(args[2], "r+b"));
+	FileStream stream = new FileStream(File(args[2], "r+b"));
 	scope disk = XeDisk.open(stream, XeDiskOpenMode.ReadWrite);
 	scope fs = XeFileSystem.open(disk);
 
