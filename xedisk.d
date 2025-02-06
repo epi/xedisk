@@ -350,7 +350,7 @@ void list(string[] args)
 		"s|sectors", &sizeInSectors,
 		"l|long", &longFormat);
 
-	enforce(args.length >= 3, format("Missing image file name", args[0]));
+	enforce(args.length >= 3, "Missing image file name");
 
 	auto sh = openPartition(args[2], partition, OpenMode.ReadOnly);
 	sh.fs = XeFileSystem.open(sh.disk);
