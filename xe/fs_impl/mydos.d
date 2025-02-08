@@ -938,14 +938,18 @@ class MydosFileSystem : XeFileSystem
 				_cache.alloc(sec)[] = 0;
 
 			_cache.alloc(1)[0] = 'M';
-			_cache.request(360)[0] = vtocMarkFromGeometry(nsec, bps);
+			auto buf = _cache.request(360);
+			buf[0] = vtocMarkFromGeometry(nsec, bps);
+			auto freeSectors = nsec - 3 - vtocSize - 8;
+			buf[1] = getByte!0(freeSectors);
+			buf[2] = getByte!1(freeSectors);
+			setFreeSectors(freeSectors);
 
 			// all sectors (except boot area, vtoc and root dir) free
 			foreach (sec; 4 .. lastVtocSector)
 				_vtoc[sec] = true;
 			foreach (sec; 369 .. nsec + 1)
 				_vtoc[sec] = true;
-			setFreeSectors(nsec - 3 - vtocSize - 8);
 			_cache.flush();
 		}
 		auto buf = _cache.request(360);
