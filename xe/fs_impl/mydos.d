@@ -238,7 +238,7 @@ private mixin template ImplementRegularEntry()
 	override string getName() { return unformatFileName(_entry.name); }
 	override void rename(string newName)
 	{
-		enforce(!isReadOnly(), format("Cannot rename read only file `%s'", getName()));
+		enforce(!isReadOnly(), format("Cannot rename read-only file `%s'", getName()));
 		_entry.name = formatFileName(newName);
 	}
 	override uint getSectors() { return _entry.sectors; }
@@ -351,7 +351,7 @@ class MydosRootDirectory : MydosDirectory
 	override void doRemove() { throw new Exception("Cannot delete root directory"); }
 	override uint getSectors() { return 8; }
 	override bool isReadOnly() { return true; } // because you can't delete or rename it
-	override void setReadOnly(bool value) { throw new Exception("Cannot change read only flag for root directory"); }
+	override void setReadOnly(bool value) { throw new Exception("Cannot change read-only flag for root directory"); }
 
 	private this(MydosFileSystem fs) { _fs = fs; }
 
@@ -636,7 +636,7 @@ private final class MydosFile : XeFile
 
 		override void doWrite(in ubyte[] buffer)
 		{
-			enforce(!isReadOnly(), "File is read only");
+			enforce(!isReadOnly(), "File is read-only");
 			uint written;
 			auto dbps = _fs._cache.getSectorSize() - 3;
 			CachedSector buf;
@@ -684,7 +684,7 @@ private final class MydosFile : XeFile
 
 	override OutputStream openWriteOnly(bool append = false)
 	{
-		enforce(!isReadOnly(), format("Cannot open read only file `%s' for writing", getName()));
+		enforce(!isReadOnly(), format("Cannot open read-only file `%s' for writing", getName()));
 		if (!append)
 			truncate();
 		return new MydosFileOutputStream();
