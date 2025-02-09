@@ -412,7 +412,7 @@ class SpartaRootDirectory : SpartaDirectory
 	override void rename(string newName) { throw new Exception("Cannot rename root directory"); }
 	override void doRemove() { throw new Exception("Cannot delete root directory"); }
 	override bool isReadOnly() { return true; }
-	override void setReadOnly(bool value) { throw new Exception("Cannot change `read only' flag for root directory"); }
+	override void setReadOnly(bool value) { throw new Exception("Cannot change `read-only' flag for root directory"); }
 
 	override bool isHidden() { return false; }
 	override void setHidden(bool value) { throw new Exception("Cannot change `hidden' flag for root directory"); }
