@@ -306,13 +306,12 @@ private mixin template ImplementDirectory()
 			}
 			else if (entry.name == fname)
 			{
-				if (entry.status == EntryStatus.Directory)
+				if (entry.status & EntryStatus.Directory)
 					throw new Exception(format("Cannot overwrite directory `%s'", name));
-				if (status == EntryStatus.Directory)
+				if (status & EntryStatus.Directory)
 					throw new Exception(format("File `%s' already exists", name));
 				if (entry.status & EntryStatus.ReadOnly)
-					throw new Exception(format("Cannot overwrite read only %s `%s'",
-						entry.status == EntryStatus.Directory ? "directory" : "file", name));
+					throw new Exception(format("Cannot overwrite read-only file `%s'", name));
 				// if (entry.status & EntryStatus.OpenForWriting)
 				//	throw new Exception("File is busy");
 				newEntry = entry;
