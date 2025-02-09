@@ -132,7 +132,7 @@ class XeFile : XeEntry
 	final override void remove(bool forceRemoveContents)
 	{
 		if (isReadOnly())
-			throw new XeException("Cannot remove read only " ~ toString());
+			throw new XeException("Cannot remove read-only " ~ toString());
 		doRemove();
 	}
 
@@ -297,7 +297,7 @@ class XeDirectory : XeEntry
 	{
 		if (isReadOnly())
 			throw new XeException(format(
-				"Cannot remove read only directory `%s'", getName()), 167);
+				"Cannot remove read-only directory `%s'", getName()), 167);
 		string childName;
 		bool hasAnyChild;
 		bool hasReadOnlyChild;
@@ -316,7 +316,7 @@ class XeDirectory : XeEntry
 				"Cannot remove non-empty directory `%s'", getFullPath()), 175);
 		if (hasReadOnlyChild)
 			throw new XeException(format(
-				"Cannot remove directory `%s' containing a read only child `%s'",
+				"Cannot remove directory `%s' containing a read-only child `%s'",
 				getName(), childName), 175);
 		foreach (entry; enumerate(XeSpanMode.Depth))
 			entry.doRemove();
