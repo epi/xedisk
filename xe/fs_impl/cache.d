@@ -373,6 +373,7 @@ private:
 				}
 				_hashTable.remove(centry._sector);
 				centry._sector = sector;
+				centry._data[] = 0;
 				_hashTable[sector] = centry;
 				moveToFront(centry);
 				return;
